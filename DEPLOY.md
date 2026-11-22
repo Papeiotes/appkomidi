@@ -1,40 +1,45 @@
 # Δημοσίευση APPkomidi στο Railway
 
-Οι εντολές τρέχουν στον υπολογιστή σου, από τη ρίζα του αποθετηρίου. Το Railway CLI ανεβάζει τον κώδικα με `railway up`. Δεν χρειάζεται σύνδεση Git.
+Η εφαρμογή είναι ήδη δημόσια:
 
-Τα Dockerfiles χτίζονται μόνο από τη ρίζα του monorepo (`docker build -f apps/api/Dockerfile .`), γιατί το pnpm workspace περιλαμβάνει `packages/shared`.
+- Web: `https://appkomidi-web-production.up.railway.app`
+- API: `https://appkomidi-api-production.up.railway.app`
 
-## 1. Εγκατάσταση και project
+Οι εντολές τρέχουν από τη ρίζα του αποθετηρίου. Το Railway CLI ανεβάζει τον κώδικα με `railway up`. Δεν χρειάζεται σύνδεση Git.
+
+Τα Dockerfiles χτίζονται από τη ρίζα του monorepo, γιατί το pnpm workspace περιλαμβάνει το `packages/shared`.
+
+## 1. Project και services
 
 ```bash
 npm i -g @railway/cli
 railway login
 railway init --name appkomidi
-```
-
-Αν το CLI ζητήσει workspace, διάλεξε το δικό σου.
-
-```bash
-railway add --database postgres --service appkomidi-db
+railway add --database postgres
 railway add --service appkomidi-api
 railway add --service appkomidi-web
 ```
 
-Στις ρυθμίσεις κάθε service (Railway → service → Settings):
+Η βάση που φτιάχνει το `railway add --database postgres` ονομάζεται `Postgres`. Το API παίρνει τη σύνδεση με αναφορά σε αυτό το όνομα:
 
-- Root directory: κενό (ρίζα του repo).
-- Config file: `railway.api.toml` για το API, `railway.web.toml` για το web.
+```bash
+railway variable set 'DATABASE_URL=${{Postgres.DATABASE_URL}}' --service appkomidi-api --skip-deploys
+```
 
-Έτσι το API χρησιμοποιεί το `apps/api/Dockerfile` και το web το `apps/web/Dockerfile`.
+Το Dockerfile κάθε service ορίζεται με `RAILWAY_DOCKERFILE_PATH` (ρίζα του repo, όχι φάκελος του app):
+
+```bash
+railway variable set RAILWAY_DOCKERFILE_PATH=apps/api/Dockerfile --service appkomidi-api --skip-deploys
+railway variable set RAILWAY_DOCKERFILE_PATH=apps/web/Dockerfile --service appkomidi-web --skip-deploys
+```
+
+Τα `railway.api.toml` και `railway.web.toml` δείχνουν τα ίδια paths αν το Railway διαβάζει config-as-code.
 
 ## 2. Μεταβλητές
-
-Δες τα ονόματα των services με `railway service list`.
 
 API (`appkomidi-api`):
 
 ```bash
-railway variable set 'DATABASE_URL=${{appkomidi-db.DATABASE_URL}}' --service appkomidi-api --skip-deploys
 railway variable set "JWT_SECRET=$(openssl rand -hex 32)" --service appkomidi-api --skip-deploys
 railway variable set TZ=Europe/Athens --service appkomidi-api --skip-deploys
 railway variable set ADMIN_USERNAME=admin --service appkomidi-api --skip-deploys
@@ -45,25 +50,20 @@ railway variable set OVERFLOW_KG=75 --service appkomidi-api --skip-deploys
 railway variable set SEED_DEMO=0 --service appkomidi-api --skip-deploys
 railway variable set NOMINATIM_URL=https://nominatim.openstreetmap.org --service appkomidi-api --skip-deploys
 railway variable set OSRM_URL=https://router.project-osrm.org --service appkomidi-api --skip-deploys
+railway variable set CORS_ORIGINS=https://appkomidi-web-production.up.railway.app --service appkomidi-api --skip-deploys
 ```
 
-Το `PORT` το δίνει το Railway. Μην το ορίσεις εσύ. Το `SEED_DEMO=0` μένει έτσι ώστε κάθε επανεκκίνηση να μην ξαναγράφει τις βάρδιες.
+Το `PORT` το δίνει το Railway. Μην το ορίσεις εσύ.
 
-Web (`appkomidi-web`), αφού υπάρχει δημόσιο URL για το API (βήμα 3):
+Web (`appkomidi-web`). Το Next ενσωματώνει τη διεύθυνση στο build, γι' αυτό μπαίνει πριν το `railway up`:
 
 ```bash
-railway variable set NEXT_PUBLIC_API_URL=https://ΔΙΕΥΘΥΝΣΗ-API --service appkomidi-web --skip-deploys
+railway variable set NEXT_PUBLIC_API_URL=https://appkomidi-api-production.up.railway.app --service appkomidi-web --skip-deploys
 ```
 
-Χωρίς κάθετο στο τέλος. Το Next την ενσωματώνει στο build, γι' αυτό την βάζεις πριν το `railway up` του web και ξανακάνεις deploy αν την αλλάξεις.
+Χωρίς κάθετο στο τέλος. Αν την αλλάξεις, ξανακάνε deploy το web.
 
-Μετά το δημόσιο URL του web:
-
-```bash
-railway variable set CORS_ORIGINS=https://ΔΙΕΥΘΥΝΣΗ-WEB --service appkomidi-api
-```
-
-Πολλά origins χωρίζονται με κόμμα. Το Socket.IO χρησιμοποιεί το ίδιο HTTPS, άρα ο browser ανοίγει `wss`.
+Το Socket.IO χρησιμοποιεί το ίδιο HTTPS του API, άρα ο browser ανοίγει `wss`.
 
 ## 3. Domains και deploy
 
@@ -74,44 +74,46 @@ railway up --service appkomidi-api --detach
 railway up --service appkomidi-web --detach
 ```
 
-Παρακολούθηση:
+Logs και κατάσταση:
 
 ```bash
 railway logs --service appkomidi-api
 railway deployment list --service appkomidi-api
 ```
 
-Σε κάθε εκκίνηση το API τρέχει `prisma migrate deploy` και μετά τον server. Το health check είναι `GET /health`.
+Σε κάθε εκκίνηση το API τρέχει `prisma migrate deploy` και μετά τον server. Έλεγχος: `GET /health`.
 
-Ξανά deploy μετά από αλλαγές: ίδιο `railway up --service …` από τη ρίζα.
+Νέο deploy μετά από αλλαγές στον κώδικα: το ίδιο `railway up --service …` από τη ρίζα.
 
-## 4. Demo seed, μία φορά
+## 4. Demo seed
 
-Όταν το `/health` απαντά, μέσα στο container (έχει ήδη το `DATABASE_URL`):
+Το `SEED_DEMO=0` μένει η κανονική τιμή, ώστε ένα απλό restart να μην σβήνει ραντεβού.
 
-```bash
-railway ssh --service appkomidi-api -- node dist/seed.js
-```
-
-Πριν από αυτή την εντολή, για μία εκτέλεση μόνο, βάλε `SEED_DEMO=1` μπροστά:
+Για να ξαναγεμίσει η βάση με τους λογαριασμούς `demo_*` και βάρδιες και για τους τέσσερις κάδους:
 
 ```bash
-railway ssh --service appkomidi-api -- env SEED_DEMO=1 node dist/seed.js
+railway variable set SEED_DEMO=1 --service appkomidi-api
 ```
 
-Ο κατάλογος εργασίας στο image είναι το `apps/api`, όπου βρίσκεται το `dist/seed.js`. Κωδικός κάθε λογαριασμού `demo_*`: `demo1234`. Ο admin είναι `admin` / `Dimarcheio!2026`.
+Περίμενε να τελειώσει το redeploy που ξεκινάει αυτή η αλλαγή (`railway logs --service appkomidi-api`, μέχρι το `/health` να απαντά). Μετά γύρνα τη σημαία πίσω:
 
-Μην αφήσεις `SEED_DEMO=1` στις μεταβλητές του service. Το επόμενο deploy θα ξαναγράψει τις σημερινές βάρδιες.
+```bash
+railway variable set SEED_DEMO=0 --service appkomidi-api
+```
+
+Κωδικός κάθε `demo_*`: `demo1234`. Admin: `admin` / `Dimarcheio!2026`.
+
+Μην αφήσεις `SEED_DEMO=1`. Το επόμενο deploy θα ξαναγράψει τις σημερινές βάρδιες.
 
 ## 5. Έλεγχος
 
-- `https://ΔΙΕΥΘΥΝΣΗ-API/health` → `{"ok":true,...}`
-- `https://ΔΙΕΥΘΥΝΣΗ-WEB` → σελίδα σύνδεσης
+- `https://appkomidi-api-production.up.railway.app/health`
+- `https://appkomidi-web-production.up.railway.app`
 - `demo_admin`, `demo_business`, `demo_driver` με `demo1234`
 
-## 6. Android APK
+## 6. Android APK (EAS)
 
-Στο `apps/mobile/eas.json` το `EXPO_PUBLIC_API_URL` πρέπει να είναι το δημόσιο HTTPS του API. Μετά:
+Project: `@papeiotess-team/appkomidi`. Το `owner` και το `extra.eas.projectId` είναι στο `apps/mobile/app.json` και στο `apps/mobile/app.config.ts`. Το `eas.json` έχει ήδη `EXPO_PUBLIC_API_URL=https://appkomidi-api-production.up.railway.app`. Το `eas-build-post-install` χτίζει το `@vardia/shared` πριν το bundle.
 
 ```bash
 cd apps/mobile
