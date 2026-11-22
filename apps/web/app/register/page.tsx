@@ -3,11 +3,10 @@
 import { t } from "@vardia/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Shell } from "@/components/shell";
 import { MapPicker } from "@/components/maps";
-import { ErrorNote, Shell } from "@/components/shell";
-import { Button } from "@/components/ui/button";
+import { Wizard } from "@/components/wizard";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ApiError, api, type User } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -15,107 +14,61 @@ export default function RegisterPage() {
   const auth = useAuth();
   const router = useRouter();
   const locale = auth.locale;
-  const [form, setForm] = useState({
-    username: "",
-    password: "",
-    businessName: "",
-    afm: "",
-    phone: "",
-    contactName: "",
-    street: "",
-    streetNumber: "",
-    addressLabel: "",
-  });
+  const [step, setStep] = useState(0);
+  const [businessName, setBusinessName] = useState("");
+  const [afm, setAfm] = useState("");
+  const [phone, setPhone] = useState("");
+  const [contact, setContact] = useState("");
+  const [street, setStreet] = useState("");
+  const [number, setNumber] = useState("");
   const [lat, setLat] = useState(37.9838);
   const [lng, setLng] = useState(23.7275);
-  const [confirmed, setConfirmed] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-
-  function set<K extends keyof typeof form>(key: K, value: string) {
-    setForm((current) => ({ ...current, [key]: value }));
-  }
-
+  const titles = [t(locale, "businessName"), t(locale, "afm"), t(locale, "phone"), t(locale, "contactName"), t(locale, "street"), t(locale, "confirmPin"), t(locale, "username"), t(locale, "password"), t(locale, "review")];
   return (
     <Shell>
-      <form
-        className="mx-auto grid max-w-2xl gap-3"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          if (!confirmed) {
-            setError("BAD_INPUT");
-            return;
-          }
-          setError(null);
-          try {
-            const body = await api<{ token: string; user: User }>("/auth/register", {
+      <Wizard
+        step={step}
+        total={titles.length}
+        title={titles[step]}
+        onBack={step ? () => setStep(step - 1) : undefined}
+        nextLabel={step === 8 ? t(locale, "createAccount") : undefined}
+        canNext={step === 1 ? afm.length === 9 : step === 7 ? password.length >= 8 : true}
+        onNext={() => {
+          if (step < 8) setStep(step + 1);
+          else {
+            setError(null);
+            void api<{ token: string; user: User }>("/auth/register", {
               method: "POST",
-              body: JSON.stringify({ ...form, lat, lng, locale, addressLabel: form.addressLabel || `${form.street} ${form.streetNumber}` }),
-            });
-            auth.login(body.token, body.user);
-            router.push("/business");
-          } catch (caught) {
-            setError(caught instanceof ApiError ? caught.code : "REQUEST_FAILED");
+              body: JSON.stringify({
+                username, password, businessName, afm, phone, contactName: contact, street, streetNumber: number,
+                addressLabel: `${street} ${number}, Αθήνα`, lat, lng, locale,
+              }),
+            }).then((body) => {
+              auth.login(body.token, body.user);
+              router.push("/business");
+            }).catch((caught) => setError(caught instanceof ApiError ? caught.code : "REQUEST_FAILED"));
           }
         }}
       >
-        <h1 className="text-3xl font-semibold">{t(locale, "registerTitle")}</h1>
-        <ErrorNote code={error} locale={locale} />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label={t(locale, "businessName")} value={form.businessName} onChange={(value) => set("businessName", value)} />
-          <Field label={t(locale, "afm")} value={form.afm} onChange={(value) => set("afm", value)} />
-          <Field label={t(locale, "phone")} value={form.phone} onChange={(value) => set("phone", value)} />
-          <Field label={t(locale, "contactName")} value={form.contactName} onChange={(value) => set("contactName", value)} />
-          <Field label={t(locale, "username")} value={form.username} onChange={(value) => set("username", value)} />
-          <Field label={t(locale, "password")} value={form.password} onChange={(value) => set("password", value)} type="password" />
-          <Field label={t(locale, "street")} value={form.street} onChange={(value) => set("street", value)} />
-          <Field label={t(locale, "streetNumber")} value={form.streetNumber} onChange={(value) => set("streetNumber", value)} />
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={async () => {
-            const query = `${form.street} ${form.streetNumber}`;
-            const body = await api<{ results: { label: string; lat: number; lng: number }[] }>(
-              `/geo/search?q=${encodeURIComponent(query)}`,
-            );
-            const first = body.results[0];
-            if (!first) return;
-            setLat(first.lat);
-            setLng(first.lng);
-            setForm((current) => ({ ...current, addressLabel: first.label }));
-            setConfirmed(false);
-          }}
-        >
-          {t(locale, "searchAddress")}
-        </Button>
-        <p className="text-sm text-muted-foreground">{t(locale, "pinHelp")}</p>
-        <MapPicker
-          locale={locale}
-          lat={lat}
-          lng={lng}
-          onChange={(next) => {
-            setLat(next.lat);
-            setLng(next.lng);
-            if (next.label) setForm((current) => ({ ...current, addressLabel: next.label ?? current.addressLabel }));
-            setConfirmed(false);
-          }}
-        />
-        <Button type="button" variant={confirmed ? "secondary" : "default"} onClick={() => setConfirmed(true)}>
-          {confirmed ? t(locale, "pinConfirmed") : t(locale, "confirmPin")}
-        </Button>
-        <Button className="h-10" type="submit" disabled={!confirmed}>
-          {t(locale, "createAccount")}
-        </Button>
-      </form>
+        {step === 0 ? <Input className="h-14 text-lg" value={businessName} onChange={(e) => setBusinessName(e.target.value)} /> : null}
+        {step === 1 ? <Input className="h-14 text-lg" value={afm} onChange={(e) => setAfm(e.target.value)} /> : null}
+        {step === 2 ? <Input className="h-14 text-lg" value={phone} onChange={(e) => setPhone(e.target.value)} /> : null}
+        {step === 3 ? <Input className="h-14 text-lg" value={contact} onChange={(e) => setContact(e.target.value)} /> : null}
+        {step === 4 ? (
+          <div className="grid gap-3">
+            <Input className="h-14" placeholder={t(locale, "street")} value={street} onChange={(e) => setStreet(e.target.value)} />
+            <Input className="h-14" placeholder={t(locale, "streetNumber")} value={number} onChange={(e) => setNumber(e.target.value)} />
+            <button type="button" className="text-left text-primary" onClick={() => void api<{ results: { lat: number; lng: number }[] }>(`/geo/search?q=${encodeURIComponent(`${street} ${number} Αθήνα`)}`).then((body) => { if (body.results[0]) { setLat(body.results[0].lat); setLng(body.results[0].lng); } })}>{t(locale, "searchAddress")}</button>
+          </div>
+        ) : null}
+        {step === 5 ? <MapPicker locale={locale} lat={lat} lng={lng} onChange={(next) => { setLat(next.lat); setLng(next.lng); }} /> : null}
+        {step === 6 ? <Input className="h-14 text-lg" value={username} onChange={(e) => setUsername(e.target.value)} /> : null}
+        {step === 7 ? <Input className="h-14 text-lg" type="password" value={password} onChange={(e) => setPassword(e.target.value)} /> : null}
+        {step === 8 ? <div className="rounded-2xl bg-secondary p-5 text-lg"><p>{businessName}</p><p>{street} {number}</p>{error ? <p className="text-destructive">{error}</p> : null}</div> : null}
+      </Wizard>
     </Shell>
-  );
-}
-
-function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
-  return (
-    <label className="grid gap-1 text-sm">
-      <Label>{label}</Label>
-      <Input className="h-10" type={type} value={value} onChange={(event) => onChange(event.target.value)} required />
-    </label>
   );
 }

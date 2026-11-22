@@ -19,20 +19,22 @@ export function LiveMap({
   driver,
   line,
   stops,
+  className,
 }: {
   driver: { lat: number; lng: number } | null;
   line: [number, number][];
   stops: { lat: number; lng: number; label: string }[];
+  className?: string;
 }) {
   const center = driver ?? stops[0] ?? { lat: 37.9838, lng: 23.7275 };
   return (
-    <div className="h-80 overflow-hidden rounded-xl border border-border md:h-[28rem]">
+    <div className={className ?? "h-80 overflow-hidden rounded-xl border border-border md:h-[28rem]"}>
       <MapContainer center={[center.lat, center.lng]} zoom={14} className="h-full w-full">
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {line.length > 1 ? <Polyline positions={line} pathOptions={{ color: "#2f4a34", weight: 4 }} /> : null}
+        {line.length > 1 ? <Polyline positions={line} pathOptions={{ color: "#1b7f4a", weight: 5 }} /> : null}
         {stops.map((point) => (
           <Marker key={`${point.lat}-${point.lng}-${point.label}`} position={[point.lat, point.lng]} icon={stop} />
         ))}

@@ -2,11 +2,10 @@
 
 import { formatWhen, t, type MessageKey } from "@vardia/shared";
 import { useEffect, useState } from "react";
-import { ErrorNote, Shell } from "@/components/shell";
-import { Button } from "@/components/ui/button";
+import { Wizard } from "@/components/wizard";
 import { Input } from "@/components/ui/input";
 import { ApiError, api } from "@/lib/api";
-import { useRequire } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
 
 type Row = {
   id: string;
@@ -14,98 +13,88 @@ type Row = {
   kg: number;
   status: string;
   scheduledAt: string;
-  business: { name: string; subArea: { name: string } | null };
-  shift: { driver: { name: string }; truck: { binType: string } };
+  business: { name: string };
+  shift: { driver: { name: string } };
 };
 
 export default function OfficePage() {
-  const auth = useRequire();
-  const locale = auth.locale;
+  const { locale, token } = useAuth();
   const [rows, setRows] = useState<Row[]>([]);
-  const [day, setDay] = useState("");
-  const [binType, setBinType] = useState("");
-  const [question, setQuestion] = useState<Record<string, string>>({});
-  const [moveAt, setMoveAt] = useState<Record<string, string>>({});
+  const [bin, setBin] = useState("");
+  const [selected, setSelected] = useState<Row | null>(null);
+  const [step, setStep] = useState(0);
+  const [action, setAction] = useState<"move" | "cancel" | "ask" | "">("");
+  const [when, setWhen] = useState("");
+  const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    if (!auth.token) return;
-    const params = new URLSearchParams();
-    if (day) params.set("day", day);
-    if (binType) params.set("binType", binType);
-    const body = await api<{ bookings: Row[] }>(`/office/bookings?${params}`, {}, auth.token);
+    const params = bin ? `?binType=${bin}` : "";
+    const body = await api<{ bookings: Row[] }>(`/office/bookings${params}`, {}, token);
     setRows(body.bookings);
   }
-
   useEffect(() => {
-    if (!auth.token || (auth.user && auth.user.role === "BUSINESS")) return;
-    load().catch((caught) => setError(caught instanceof ApiError ? caught.code : "REQUEST_FAILED"));
-  }, [auth.token, day, binType]);
+    if (token) void load().catch((caught) => setError(caught instanceof ApiError ? caught.code : "REQUEST_FAILED"));
+  }, [token, bin]);
+
+  if (selected) {
+    const titles = [t(locale, "more"), action === "move" ? t(locale, "pickTime") : action === "ask" ? t(locale, "question") : t(locale, "review")];
+    const total = action === "cancel" ? 2 : 3;
+    return (
+      <Wizard
+        step={step}
+        total={total}
+        title={titles[Math.min(step, titles.length - 1)]}
+        onBack={() => (step === 0 ? setSelected(null) : setStep(step - 1))}
+        nextLabel={step === total - 1 ? t(locale, "save") : undefined}
+        canNext={step === 0 ? Boolean(action) : true}
+        onNext={() => {
+          if (step < total - 1) setStep(step + 1);
+          else {
+            const done = () => { setSelected(null); return load(); };
+            if (action === "cancel") void api(`/office/bookings/${selected.id}/cancel`, { method: "POST" }, token).then(done);
+            if (action === "move") void api(`/office/bookings/${selected.id}/move`, { method: "POST", body: JSON.stringify({ scheduledAt: new Date(when).toISOString() }) }, token).then(done);
+            if (action === "ask") void api(`/office/bookings/${selected.id}/question`, { method: "POST", body: JSON.stringify({ text }) }, token).then(done);
+          }
+        }}
+      >
+        {step === 0 ? (
+          <div className="grid gap-3">
+            {(["move", "cancel", "ask"] as const).map((item) => (
+              <button key={item} type="button" className={`h-14 rounded-2xl border ${action === item ? "border-primary bg-secondary" : "border-border"}`} onClick={() => setAction(item)}>
+                {t(locale, item === "move" ? "changeTime" : item === "cancel" ? "cancelBooking" : "question")}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {step === 1 && action === "move" ? <Input className="h-14" type="datetime-local" value={when} onChange={(event) => setWhen(event.target.value)} /> : null}
+        {step === 1 && action === "ask" ? <Input className="h-14" value={text} onChange={(event) => setText(event.target.value)} /> : null}
+        {step === total - 1 ? <p className="text-lg">{selected.business.name}</p> : null}
+      </Wizard>
+    );
+  }
 
   return (
-    <Shell>
-      <h1 className="text-3xl font-semibold">{t(locale, "navOffice")}</h1>
-      <ErrorNote code={error} locale={locale} />
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Input className="h-10 w-44" type="date" value={day} onChange={(event) => setDay(event.target.value)} />
-        <select className="h-10 rounded-lg border border-input px-2" value={binType} onChange={(event) => setBinType(event.target.value)}>
-          <option value="">{t(locale, "filters")}</option>
-          {["GREEN", "BLUE", "YELLOW", "BROWN"].map((item) => (
-            <option key={item} value={item}>
-              {t(locale, `bin_${item}` as MessageKey)}
-            </option>
-          ))}
-        </select>
+    <div>
+      <h1 className="text-3xl font-semibold">{t(locale, "navBookings")}</h1>
+      {error ? <p className="mt-3 text-destructive">{error}</p> : null}
+      <div className="mt-4 flex gap-2 overflow-x-auto">
+        {["", "GREEN", "BLUE", "YELLOW", "BROWN"].map((item) => (
+          <button key={item} type="button" className={`h-11 shrink-0 rounded-full px-4 ${bin === item ? "bg-primary text-white" : "bg-muted"}`} onClick={() => setBin(item)}>
+            {item ? t(locale, `bin_${item}` as MessageKey) : t(locale, "filters")}
+          </button>
+        ))}
       </div>
-      {rows.length === 0 ? <p className="mt-4 text-sm text-muted-foreground">{t(locale, "empty")}</p> : null}
-      <ul className="mt-4 grid gap-3">
+      <ul className="mt-6 grid gap-3">
         {rows.map((row) => (
-          <li key={row.id} className="grid gap-2 rounded-xl border border-border p-3 text-sm">
-            <p>
-              {row.business.name} · {t(locale, `bin_${row.binType}` as MessageKey)} · {row.kg} kg · {formatWhen(row.scheduledAt, locale)} · {row.shift.driver.name}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Input className="h-10 w-56" type="datetime-local" value={moveAt[row.id] ?? ""} onChange={(event) => setMoveAt({ ...moveAt, [row.id]: event.target.value })} />
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={async () => {
-                  try {
-                    await api(`/office/bookings/${row.id}/move`, { method: "POST", body: JSON.stringify({ scheduledAt: new Date(moveAt[row.id]).toISOString() }) }, auth.token);
-                    await load();
-                  } catch (caught) {
-                    setError(caught instanceof ApiError ? caught.code : "REQUEST_FAILED");
-                  }
-                }}
-              >
-                {t(locale, "changeTime")}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={async () => {
-                  await api(`/office/bookings/${row.id}/cancel`, { method: "POST" }, auth.token);
-                  await load();
-                }}
-              >
-                {t(locale, "cancelBooking")}
-              </Button>
-            </div>
-            <div className="flex gap-2">
-              <Input className="h-10" value={question[row.id] ?? ""} placeholder={t(locale, "question")} onChange={(event) => setQuestion({ ...question, [row.id]: event.target.value })} />
-              <Button
-                size="sm"
-                onClick={async () => {
-                  await api(`/office/bookings/${row.id}/question`, { method: "POST", body: JSON.stringify({ text: question[row.id] ?? "" }) }, auth.token);
-                  setQuestion({ ...question, [row.id]: "" });
-                }}
-              >
-                {t(locale, "send")}
-              </Button>
-            </div>
+          <li key={row.id}>
+            <button type="button" className="w-full rounded-2xl border border-border px-4 py-4 text-left" onClick={() => { setSelected(row); setStep(0); setAction(""); }}>
+              <p className="text-lg">{row.business.name}</p>
+              <p className="text-sm text-muted-foreground">{formatWhen(row.scheduledAt, locale)} · {row.kg} kg · {row.shift.driver.name}</p>
+            </button>
           </li>
         ))}
       </ul>
-    </Shell>
+    </div>
   );
 }

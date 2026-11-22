@@ -6,14 +6,19 @@ Appointment booking for commercial waste pickup in a Greek municipality. A shop 
 
 Maps are OpenStreetMap, Nominatim, and OSRM. No Google key.
 
-The database starts empty except for one admin.
+Demo data is for **Δήμος Αθηναίων**. Every demo account uses the password `demo1234`.
 
-| | |
+| Username | Role |
 | --- | --- |
-| Username | `admin` |
-| Password | `Dimarcheio!2026` |
+| `demo_admin` | Admin |
+| `demo_office` | Office |
+| `demo_driver` | Driver, green / mixed truck, today’s route |
+| `demo_driver_blue` | Driver, blue truck |
+| `demo_driver_yellow` | Driver, yellow truck |
+| `demo_driver_brown` | Driver, brown truck |
+| `demo_business` | Shop in Plaka |
 
-Change them with `ADMIN_USERNAME` and `ADMIN_PASSWORD`. `OVERFLOW_KG` (default 75) is the weight used for a 50+ booking.
+`pnpm db:seed` loads that demo. `pnpm db:seed:empty` or `SEED_DEMO=0` keeps only the env admin (`admin` / `Dimarcheio!2026` unless you change it). `OVERFLOW_KG` (default 75) is the weight used for a 50+ booking.
 
 ## English
 
@@ -51,16 +56,10 @@ On the phone, set the API address to the computer’s LAN IP, for example `http:
 
 ### Demo
 
-1. Open http://localhost:4108 and sign in as `admin` / `Dimarcheio!2026`.
-2. Create a driver (Accounts) and a truck: bin type and capacity in kg.
-3. Create a shift: truck, driver, start time. It lasts exactly 6 hours. Slots inside it are every 15 minutes.
-4. In a private window, **Register a business**. Street and number, drag the pin, confirm the location, submit.
-5. As admin, approve the request. The pin can be adjusted. If a sub-area polygon contains the pin, the shop is assigned to it.
-6. As the business, tick one or more bins, pick a kilogram bracket and a time for each, and book. Each bin becomes its own pickup. A time with no remaining kilograms is grey. The second 50+ booking on a 100 kg truck is refused.
-7. Cancel is allowed until 15 minutes before the slot.
-8. As the driver, open **Drive**. The assigned shift is already there. Press **START**. The stop order is computed from the current position and then locked. The route ends at the last stop.
-9. **Simulate 30 m** on the web (or walk the phone) to the current stop. The business sees «Το απορριμματοφόρο έφτασε» and the banner stays until **Ολοκληρώθηκε**.
-10. The driver marks the stop complete. After the last stop the shift ends. Pause freezes progress. GPS still updates while the screen is open.
+1. Open http://localhost:4108 and sign in as `demo_admin` / `demo1234`. The sidebar is one task per page. Adding an account, a truck, a shift, or a sub-area is a wizard: one question, Back/Next, then review.
+2. Sign in as `demo_driver`. The screen is a full-screen map and a large **START**. After start, only the route to the current stop is shown, with that booking’s details and **Ολοκληρώθηκε** in the bottom card. Pause and end sit in the menu.
+3. Sign in as `demo_business`. Home is one **Κλείσε ραντεβού** button and upcoming cards. Booking is bin cards, kilograms, day, time (the suggestion is highlighted), then review.
+4. `demo_office` filters pickups and changes, cancels, or asks a question one step at a time.
 
 Office (a user the admin creates with the Office role) can filter pickups, move or cancel them, and send a question. The business answers from Notifications. Office accounts receive every office permission unless you change the list later.
 
@@ -108,16 +107,10 @@ pnpm start
 
 ### Δοκιμή
 
-1. Μπες ως `admin` / `Dimarcheio!2026`.
-2. Φτιάξε οδηγό και απορριμματοφόρο (κάδος + κιλά).
-3. Φτιάξε βάρδια 6 ωρών με αυτό το όχημα και τον οδηγό.
-4. Σε άλλο παράθυρο κάνε εγγραφή επιχείρησης, σύρε την καρφίτσα, επιβεβαίωσε τη θέση.
-5. Ως admin ενέκρινε την αίτηση.
-6. Η επιχείρηση τσεκάρει κάδους, διαλέγει κιλά και ώρα για τον καθένα. Κάθε κάδος είναι ξεχωριστό ραντεβού. Ώρα χωρίς κιλά είναι γκρι.
-7. Ακύρωση μέχρι 15 λεπτά πριν.
-8. Ο οδηγός πατά **ΕΝΑΡΞΗ**. Η σειρά κλειδώνει από το τρέχον GPS και τελειώνει στην τελευταία στάση.
-9. Προσομοίωση 30 μ. (ή πραγματικό GPS). Η επιχείρηση βλέπει «Το απορριμματοφόρο έφτασε» μέχρι το **Ολοκληρώθηκε**.
-10. Μετά την τελευταία στάση η βάρδια κλείνει. Η παύση παγώνει την πρόοδο. Η θέση συνεχίζει όσο η οθόνη είναι ανοιχτή.
+1. Μπες ως `demo_admin` / `demo1234`. Κάθε σελίδα του μενού κάνει μία δουλειά. Νέος λογαριασμός, όχημα, βάρδια και υποπεριοχή είναι οδηγός βήμα-βήμα.
+2. `demo_driver`: χάρτης σε όλη την οθόνη και μεγάλο **ΕΝΑΡΞΗ**. Μετά φαίνεται μόνο η διαδρομή προς την τρέχουσα στάση και κάρτα με **Ολοκληρώθηκε**. Παύση και τέλος είναι στο μενού.
+3. `demo_business`: ένα κουμπί **Κλείσε ραντεβού** και κάρτες από κάτω. Η κράτηση είναι κάδος, κιλά, μέρα, ώρα, έλεγχος.
+4. `demo_office` φιλτράρει και αλλάζει, ακυρώνει ή ρωτά σε ξεχωριστά βήματα.
 
 Το γραφείο φιλτράρει, αλλάζει ώρα, ακυρώνει και στέλνει ερώτηση. Η απάντηση γυρίζει από τις ειδοποιήσεις.
 

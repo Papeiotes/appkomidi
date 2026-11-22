@@ -79,6 +79,64 @@ adminRouter.post(
   }),
 );
 
+adminRouter.post(
+  "/admin/businesses",
+  requireAuth("ADMIN"),
+  wrap(async (req, res) => {
+    const auth = (req as AuthedRequest).auth;
+    const body = z
+      .object({
+        username,
+        password: z.string().min(8).max(72),
+        businessName: z.string().trim().min(2),
+        afm: z.string().regex(/^\d{9}$/),
+        phone: z.string().min(6),
+        contactName: z.string().min(2),
+        street: z.string().min(2),
+        streetNumber: z.string().min(1),
+        addressLabel: z.string().min(3),
+        lat: z.number(),
+        lng: z.number(),
+      })
+      .parse(req.body);
+    if (!isValidAfm(body.afm) || !isValidLatLng(body.lat, body.lng)) throw new HttpError(400, "AFM_INVALID");
+    const taken = await prisma.user.findUnique({ where: { username: body.username } });
+    if (taken) throw new HttpError(409, "USERNAME_TAKEN");
+    const areas = await prisma.subArea.findMany({ where: { municipalityId: auth.municipalityId } });
+    const subAreaId = assignSubArea(
+      { lat: body.lat, lng: body.lng },
+      areas.map((area) => ({ id: area.id, ring: area.ring as [number, number][] })),
+    );
+    const user = await prisma.user.create({
+      data: {
+        username: body.username,
+        passwordHash: await hashPassword(body.password),
+        role: "BUSINESS",
+        name: body.contactName,
+        phone: body.phone,
+        municipalityId: auth.municipalityId,
+        business: {
+          create: {
+            municipalityId: auth.municipalityId,
+            name: body.businessName,
+            afm: body.afm,
+            phone: body.phone,
+            contactName: body.contactName,
+            street: body.street,
+            streetNumber: body.streetNumber,
+            addressLabel: body.addressLabel,
+            lat: body.lat,
+            lng: body.lng,
+            status: "APPROVED",
+            subAreaId,
+          },
+        },
+      },
+    });
+    res.status(201).json({ user: { id: user.id, username: user.username } });
+  }),
+);
+
 adminRouter.get(
   "/admin/users",
   requireAuth("ADMIN"),
@@ -105,10 +163,16 @@ adminRouter.post(
         phone: z.string().optional(),
         role: z.enum(["ADMIN", "OFFICE", "DRIVER"]),
         permissions: z.array(z.enum(OFFICE_PERMISSIONS)).optional(),
+        binType: z.enum(["GREEN", "BLUE", "YELLOW", "BROWN"]).optional(),
+        plate: z.string().trim().min(2).max(16).optional(),
+        capacityKg: z.number().int().min(10).max(20000).optional(),
       })
       .parse(req.body);
     const taken = await prisma.user.findUnique({ where: { username: body.username } });
     if (taken) throw new HttpError(409, "USERNAME_TAKEN");
+    if (body.role === "DRIVER" && (!body.binType || !body.plate || !body.capacityKg)) {
+      throw new HttpError(400, "BAD_INPUT");
+    }
     const user = await prisma.user.create({
       data: {
         username: body.username,
@@ -120,6 +184,17 @@ adminRouter.post(
         permissions: body.role === "OFFICE" ? body.permissions ?? [...OFFICE_PERMISSIONS] : [],
       },
     });
+    if (body.role === "DRIVER" && body.binType && body.plate && body.capacityKg) {
+      await prisma.truck.create({
+        data: {
+          municipalityId: auth.municipalityId,
+          binType: body.binType,
+          capacityKg: body.capacityKg,
+          plate: body.plate.toUpperCase(),
+          driverId: user.id,
+        },
+      });
+    }
     res.status(201).json({ user: { id: user.id, username: user.username, role: user.role, permissions: user.permissions } });
   }),
 );
@@ -139,10 +214,21 @@ adminRouter.post(
   requireAuth("ADMIN"),
   wrap(async (req, res) => {
     const body = z
-      .object({ binType: z.enum(["GREEN", "BLUE", "YELLOW", "BROWN"]), capacityKg: z.number().int().min(10).max(20000) })
+      .object({
+        binType: z.enum(["GREEN", "BLUE", "YELLOW", "BROWN"]),
+        capacityKg: z.number().int().min(10).max(20000),
+        plate: z.string().trim().min(2).max(16),
+        driverId: z.string().optional(),
+      })
       .parse(req.body);
     const truck = await prisma.truck.create({
-      data: { municipalityId: (req as AuthedRequest).auth.municipalityId, binType: body.binType, capacityKg: body.capacityKg },
+      data: {
+        municipalityId: (req as AuthedRequest).auth.municipalityId,
+        binType: body.binType,
+        capacityKg: body.capacityKg,
+        plate: body.plate.toUpperCase(),
+        driverId: body.driverId,
+      },
     });
     res.status(201).json({ truck });
   }),
@@ -256,5 +342,3 @@ adminRouter.get(
   }),
 );
 
-void isValidAfm;
-void isValidLatLng;

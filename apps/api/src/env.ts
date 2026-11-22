@@ -10,5 +10,6 @@ export const env = {
   adminName: process.env.ADMIN_NAME ?? "Διαχειριστής",
   municipalityName: process.env.MUNICIPALITY_NAME ?? "Δήμος",
   overflowKg: Number(process.env.OVERFLOW_KG ?? 75),
+  seedDemo: process.env.SEED_DEMO !== "0",
   nodeEnv: process.env.NODE_ENV ?? "development",
 };

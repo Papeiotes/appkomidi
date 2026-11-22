@@ -73,6 +73,7 @@ model User {
   permissions    String[]     @default([])
   business       Business?
   driverShifts   Shift[]      @relation("ShiftDriver")
+  linkedTrucks   Truck[]      @relation("DriverTruck")
   createdAt      DateTime     @default(now())
 }
 
@@ -116,7 +117,10 @@ model Truck {
   municipality   Municipality @relation(fields: [municipalityId], references: [id])
   binType        BinType
   capacityKg     Int
+  plate          String       @default("")
   active         Boolean      @default(true)
+  driverId       String?
+  driver         User?        @relation("DriverTruck", fields: [driverId], references: [id])
   shifts         Shift[]
 }
 

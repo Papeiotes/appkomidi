@@ -11,6 +11,7 @@
     "build": "pnpm --filter @vardia/shared build && pnpm --filter @vardia/api build && pnpm --filter @vardia/web build",
     "test": "pnpm --filter @vardia/shared test && pnpm --filter @vardia/shared build && pnpm --filter @vardia/api test",
     "db:migrate": "pnpm --filter @vardia/api exec prisma migrate deploy",
-    "db:seed": "pnpm --filter @vardia/api exec prisma db seed"
+    "db:seed": "SEED_DEMO=1 pnpm --filter @vardia/api exec tsx src/seed.ts",
+    "db:seed:empty": "SEED_DEMO=0 pnpm --filter @vardia/api exec tsx src/seed.ts"
   }
 }
