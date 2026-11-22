@@ -4,6 +4,7 @@ import { t, translateError, type Locale, type MessageKey } from "@vardia/shared"
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { homeFor, type Role } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -46,8 +47,8 @@ export function Shell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-white">
       <header className="sticky top-0 z-30 border-b border-border bg-white">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2 px-4 py-2">
-          <Link href={auth.user ? homeFor(auth.user.role) : "/"} className="inline-flex h-11 items-center text-lg font-semibold text-primary">
-            {t(locale, "brand")}
+          <Link href={auth.user ? homeFor(auth.user.role) : "/"} className="inline-flex h-11 items-center">
+            <Logo />
           </Link>
           <nav className="hidden gap-1 md:flex">
             {nav.map((item) => (

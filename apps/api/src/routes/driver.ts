@@ -54,22 +54,20 @@ driverRouter.get(
     const here = shift.lastLat != null && shift.lastLng != null ? { lat: shift.lastLat, lng: shift.lastLng } : null;
     let route = null;
     let eta: string | null = null;
-    if (shift.routeLocked && ordered.length) {
-      const points = [...(here ? [here] : []), ...ordered.map((booking) => ({ lat: booking.business.lat, lng: booking.business.lng }))];
+    const etas: Record<string, string> = {};
+    if (shift.routeLocked && ordered.length && here) {
+      const points = [here, ...ordered.map((booking) => ({ lat: booking.business.lat, lng: booking.business.lng }))];
       if (points.length >= 2) route = await routeThrough(points);
-      if (here && next) {
-        const arrival = etaForStop({
-          start: here,
-          now: new Date(),
-          ordered: ordered.map((booking) => ({
-            id: booking.id,
-            at: { lat: booking.business.lat, lng: booking.business.lng },
-            scheduledAt: booking.scheduledAt.toISOString(),
-          })),
-          targetId: next.id,
-        });
-        eta = arrival?.toISOString() ?? null;
+      const sequence = ordered.map((booking) => ({
+        id: booking.id,
+        at: { lat: booking.business.lat, lng: booking.business.lng },
+        scheduledAt: booking.scheduledAt.toISOString(),
+      }));
+      for (const stop of sequence) {
+        const arrival = etaForStop({ start: here, now: new Date(), ordered: sequence, targetId: stop.id });
+        if (arrival) etas[stop.id] = arrival.toISOString();
       }
+      if (next) eta = etas[next.id] ?? null;
     }
     res.json({
       shift: {
@@ -98,6 +96,7 @@ driverRouter.get(
       })),
       nextStopId: next?.id ?? null,
       eta,
+      etas,
       route,
     });
   }),
@@ -109,7 +108,7 @@ driverRouter.post(
   wrap(async (req, res) => {
     const body = z.object({ lat: z.number(), lng: z.number() }).parse(req.body);
     if (!isValidLatLng(body.lat, body.lng)) throw new HttpError(400, "BAD_INPUT");
-    const result = await startShift((req as AuthedRequest).auth.id, String(req.params.id), body);
+    const result = await startShift((req as AuthedRequest).auth.id, String(req.params.id), body, req.app.get("io") as Server | undefined);
     if (!result.ok) throw new HttpError(409, result.code);
     const io = req.app.get("io") as Server | undefined;
     io?.to(`shift:${result.shift.id}`).emit("shift:status", { shiftId: result.shift.id, status: result.shift.status });

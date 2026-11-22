@@ -1,4 +1,4 @@
-import { assignSubArea, copyAthensClock, isValidAfm, isValidLatLng, shiftEndsAt, OFFICE_PERMISSIONS } from "@vardia/shared";
+import { assignSubArea, athensInstant, copyAthensClock, isValidAfm, isValidLatLng, shiftEndsAt, OFFICE_PERMISSIONS } from "@vardia/shared";
 import { Router } from "express";
 import type { Server } from "socket.io";
 import { z } from "zod";
@@ -247,22 +247,92 @@ adminRouter.post(
   "/admin/shifts",
   requireAuth("ADMIN"),
   wrap(async (req, res) => {
-    const body = z.object({ truckId: z.string(), driverId: z.string(), startsAt: z.string() }).parse(req.body);
-    const startsAt = new Date(body.startsAt);
-    const endsAt = shiftEndsAt(startsAt);
+    const body = z
+      .object({
+        truckId: z.string(),
+        driverId: z.string(),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        time: z.string().regex(/^\d{2}:\d{2}$/),
+        weeks: z.number().int().min(1).max(8).optional(),
+      })
+      .parse(req.body);
+    const [hour, minute] = body.time.split(":").map(Number);
+    const [year, month, day] = body.date.split("-").map(Number);
+    const first = athensInstant(year, month, day, hour, minute);
     const truck = await prisma.truck.findUnique({ where: { id: body.truckId } });
     const driver = await prisma.user.findUnique({ where: { id: body.driverId } });
     if (!truck || !driver || driver.role !== "DRIVER") throw new HttpError(400, "BAD_INPUT");
-    const shift = await prisma.shift.create({
+    const weeks = body.weeks ?? 1;
+    const shifts = [];
+    for (let week = 0; week < weeks; week++) {
+      const startsAt = week === 0 ? first : copyAthensClock(first, addDays(body.date, week * 7));
+      shifts.push(
+        await prisma.shift.create({
+          data: {
+            municipalityId: truck.municipalityId,
+            truckId: truck.id,
+            driverId: driver.id,
+            startsAt,
+            endsAt: shiftEndsAt(startsAt),
+          },
+        }),
+      );
+    }
+    res.status(201).json({ shift: shifts[0], shifts });
+  }),
+);
+
+function addDays(date: string, days: number) {
+  const [year, month, day] = date.split("-").map(Number);
+  const civil = new Date(Date.UTC(year, month - 1, day + days));
+  const m = String(civil.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(civil.getUTCDate()).padStart(2, "0");
+  return `${civil.getUTCFullYear()}-${m}-${d}`;
+}
+
+adminRouter.patch(
+  "/admin/shifts/:id",
+  requireAuth("ADMIN"),
+  wrap(async (req, res) => {
+    const body = z
+      .object({
+        truckId: z.string().optional(),
+        driverId: z.string().optional(),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+      })
+      .parse(req.body);
+    const shift = await prisma.shift.findUnique({ where: { id: String(req.params.id) } });
+    if (!shift || shift.status !== "SCHEDULED") throw new HttpError(409, "SHIFT_STARTED");
+    let startsAt = shift.startsAt;
+    if (body.date && body.time) {
+      const [hour, minute] = body.time.split(":").map(Number);
+      const [year, month, day] = body.date.split("-").map(Number);
+      startsAt = athensInstant(year, month, day, hour, minute);
+    }
+    const updated = await prisma.shift.update({
+      where: { id: shift.id },
       data: {
-        municipalityId: truck.municipalityId,
-        truckId: truck.id,
-        driverId: driver.id,
+        truckId: body.truckId,
+        driverId: body.driverId,
         startsAt,
-        endsAt,
+        endsAt: shiftEndsAt(startsAt),
       },
     });
-    res.status(201).json({ shift });
+    res.json({ shift: updated });
+  }),
+);
+
+adminRouter.delete(
+  "/admin/shifts/:id",
+  requireAuth("ADMIN"),
+  wrap(async (req, res) => {
+    const shift = await prisma.shift.findUnique({ where: { id: String(req.params.id) } });
+    if (!shift || shift.status !== "SCHEDULED") throw new HttpError(409, "SHIFT_STARTED");
+    await prisma.booking.deleteMany({ where: { shiftId: shift.id } });
+    await prisma.slotClosure.deleteMany({ where: { shiftId: shift.id } });
+    await prisma.shift.delete({ where: { id: shift.id } });
+    res.json({ ok: true });
   }),
 );
 

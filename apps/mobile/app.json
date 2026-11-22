@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Vardia",
-    "slug": "vardia",
-    "scheme": "vardia",
+    "name": "APPkomidi",
+    "slug": "appkomidi",
+    "scheme": "appkomidi",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Η Βάρδια στέλνει τη θέση του οδηγού για την ειδοποίηση άφιξης στα 50 μέτρα."
+        "NSLocationWhenInUseUsageDescription": "Το APPkomidi στέλνει τη θέση του οδηγού για την ειδοποίηση άφιξης στα 50 μέτρα."
       }
     },
     "android": {
@@ -31,7 +31,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Η Βάρδια στέλνει τη θέση του οδηγού για την ειδοποίηση άφιξης στα 50 μέτρα."
+          "locationWhenInUsePermission": "Το APPkomidi στέλνει τη θέση του οδηγού για την ειδοποίηση άφιξης στα 50 μέτρα."
         }
       ]
     ],

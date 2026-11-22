@@ -4,6 +4,7 @@ import { t } from "@vardia/shared";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Logo } from "@/components/logo";
 import { ErrorNote, LanguageToggle } from "@/components/shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +49,9 @@ export function LoginScreen() {
         >
           <div className="text-center">
             <p className="text-sm font-medium tracking-wide text-primary">{t(locale, "cityBrand")}</p>
-            <h1 className="mt-2 text-4xl font-semibold tracking-tight">{t(locale, "brand")}</h1>
+            <div className="mt-3 flex justify-center">
+              <Logo className="[&_span]:text-3xl" />
+            </div>
             <p className="mt-2 text-sm text-muted-foreground">{t(locale, "loginSubtitle")}</p>
           </div>
           <ErrorNote code={error} locale={locale} />

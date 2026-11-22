@@ -156,34 +156,40 @@ export async function seedDemo(municipality: Municipality) {
     }
   }
 
-  const green = driverUsers[0];
-  const greenTruck = await prisma.truck.findFirst({ where: { driverId: green.id, binType: "GREEN" } });
-  if (!greenTruck) return;
-  await replaceScheduledShift({
-    municipalityId: municipality.id,
-    driverId: green.id,
-    truckId: greenTruck.id,
-    start: athensAt(0, 8),
-    bookings: [
-      { name: "Καφέ Η Πλάκα", at: athensAt(0, 8, 30), bracket: "KG_10_20", kg: 20, bin: "GREEN" },
-      { name: "Βιβλία Εξαρχείων", at: athensAt(0, 9, 15), bracket: "KG_0_10", kg: 10, bin: "GREEN" },
-      { name: "Φούρνος Κουκακίου", at: athensAt(0, 10, 0), bracket: "KG_20_50", kg: 50, bin: "GREEN" },
-      { name: "Μανάβικο Παγκρατίου", at: athensAt(0, 10, 45), bracket: "KG_10_20", kg: 20, bin: "GREEN" },
+  const todayByBin: Record<BinType, { name: string; hour: number; minute: number; bracket: QuantityBracket; kg: number }[]> = {
+    GREEN: [
+      { name: "Βιβλία Εξαρχείων", hour: 9, minute: 0, bracket: "KG_0_10", kg: 10 },
+      { name: "Καφέ Η Πλάκα", hour: 10, minute: 0, bracket: "KG_10_20", kg: 20 },
+      { name: "Μανάβικο Παγκρατίου", hour: 11, minute: 0, bracket: "KG_10_20", kg: 20 },
+      { name: "Φούρνος Κουκακίου", hour: 11, minute: 30, bracket: "KG_20_50", kg: 50 },
     ],
-  });
+    BLUE: [{ name: "Φούρνος Κουκακίου", hour: 9, minute: 30, bracket: "KG_0_10", kg: 10 }],
+    YELLOW: [{ name: "Καφέ Η Πλάκα", hour: 10, minute: 30, bracket: "KG_10_20", kg: 20 }],
+    BROWN: [{ name: "Μανάβικο Παγκρατίου", hour: 11, minute: 0, bracket: "KG_0_10", kg: 10 }],
+  };
 
-  for (const [index, account] of driverUsers.entries()) {
+  for (const account of driverUsers) {
     const truck = await prisma.truck.findFirst({ where: { driverId: account.id } });
     if (!truck) continue;
     await replaceScheduledShift({
       municipalityId: municipality.id,
       driverId: account.id,
       truckId: truck.id,
+      start: athensAt(0, 8),
+      bookings: todayByBin[truck.binType].map((slot) => ({
+        name: slot.name,
+        at: athensAt(0, slot.hour, slot.minute),
+        bracket: slot.bracket,
+        kg: slot.kg,
+        bin: truck.binType,
+      })),
+    });
+    await replaceScheduledShift({
+      municipalityId: municipality.id,
+      driverId: account.id,
+      truckId: truck.id,
       start: athensAt(1, 8),
-      bookings:
-        index === 0
-          ? [{ name: "Καφέ Η Πλάκα", at: athensAt(1, 9, 0), bracket: "KG_0_10", kg: 10, bin: truck.binType }]
-          : [],
+      bookings: [{ name: "Καφέ Η Πλάκα", at: athensAt(1, 9, 0), bracket: "KG_0_10", kg: 10, bin: truck.binType }],
     });
   }
   console.log("Demo ready. Password for every demo_* account: demo1234");

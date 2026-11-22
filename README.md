@@ -1,8 +1,8 @@
-# Αποκομιδή / Collection
+# APPkomidi
 
-Appointment booking for commercial waste pickup in a Greek municipality. A shop registers with one address and a draggable pin, the municipality approves it, and the shop books a green, blue, yellow, or brown bin. Kilograms are checked against the truck on a 6-hour shift. The driver starts once, the stop order locks, and the shop sees the truck until it is within 50 metres.
+Appointment booking for commercial waste pickup in a Greek municipality. A shop registers with one address and a draggable pin, the municipality approves it, and the shop books a green, blue, yellow, or brown bin. Kilograms are checked against the truck on a 6-hour shift. Times are every 30 minutes with a ±30 minute arrival window. The driver route is ordered to keep travel short inside those windows, and the shop sees the truck until it is within 50 metres.
 
-Ραντεβού αποκομιδής για επιχειρήσεις ενός Δήμου. Η επιχείρηση δηλώνει μία διεύθυνση και καρφίτσα, ο Δήμος εγκρίνει, και κλείνει κάδο (πράσινο, μπλε, κίτρινο, καφέ). Τα κιλά ελέγχονται πάνω στο απορριμματοφόρο μιας βάρδιας 6 ωρών. Ο οδηγός πατά έναρξη, η σειρά κλειδώνει, και η επιχείρηση βλέπει το όχημα ώσπου να μπει στα 50 μέτρα.
+Ραντεβού αποκομιδής για επιχειρήσεις ενός Δήμου. Η επιχείρηση δηλώνει μία διεύθυνση και καρφίτσα, ο Δήμος εγκρίνει, και κλείνει κάδο (πράσινο, μπλε, κίτρινο, καφέ). Τα κιλά ελέγχονται πάνω στο απορριμματοφόρο μιας βάρδιας 6 ωρών. Οι ώρες είναι ανά 30 λεπτά, με παράθυρο άφιξης ±30 λεπτά. Η διαδρομή του οδηγού μπαίνει σε σειρά ώστε να είναι σύντομη μέσα σε αυτά τα παράθυρα, και η επιχείρηση βλέπει το όχημα ώσπου να μπει στα 50 μέτρα.
 
 Maps are OpenStreetMap, Nominatim, and OSRM. No Google key.
 

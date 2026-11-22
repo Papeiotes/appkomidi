@@ -21,10 +21,11 @@ type Stop = {
   lng: number;
 };
 type Payload = {
-  shift: { id: string; status: string; binType: string; startsAt: string; lastLat: number | null; lastLng: number | null } | null;
+  shift: { id: string; status: string; binType: string; startsAt: string; lastLat: number | null; lastLng: number | null; routeOrder?: string[] } | null;
   stops: Stop[];
   nextStopId: string | null;
   eta: string | null;
+  etas?: Record<string, string>;
   route: { coordinates: [number, number][] } | null;
 };
 
@@ -49,7 +50,11 @@ export default function DrivePage() {
   }, [auth.token]);
 
   const shift = data?.shift;
-  const confirmed = (data?.stops ?? []).filter((stop) => stop.status === "CONFIRMED");
+  const confirmedRaw = (data?.stops ?? []).filter((stop) => stop.status === "CONFIRMED");
+  const routeOrder = data?.shift?.routeOrder ?? [];
+  const confirmed = routeOrder.length
+    ? routeOrder.map((id) => confirmedRaw.find((stop) => stop.id === id)).filter((stop): stop is Stop => Boolean(stop))
+    : confirmedRaw;
   const done = (data?.stops ?? []).filter((stop) => stop.status === "COMPLETED");
   const next = confirmed.find((stop) => stop.id === data?.nextStopId) ?? null;
   const line = (data?.route?.coordinates ?? []).map(([lng, lat]) => [lat, lng] as [number, number]);
@@ -130,7 +135,14 @@ export default function DrivePage() {
             </div>
             <p className="mt-2 text-muted-foreground">{next.label}</p>
             <p className="mt-1">{t(locale, `bin_${next.binType}` as MessageKey)} · {t(locale, `bracket_${next.bracket}` as MessageKey)}</p>
-            <p className="mt-1">{t(locale, "windowLabel")}: {formatWhen(next.scheduledAt, locale)} ±15</p>
+            <p className="mt-1">{t(locale, "windowLabel")}: {formatWhen(next.scheduledAt, locale)} {t(locale, "windowFlex")}</p>
+            <ol className="mt-3 grid gap-1 text-sm">
+              {confirmed.map((stop, index) => (
+                <li key={stop.id} className={stop.id === next.id ? "font-semibold" : "text-muted-foreground"}>
+                  {index + 1}. {stop.business} · {data?.etas?.[stop.id] ? formatWhen(data.etas[stop.id], locale) : formatWhen(stop.scheduledAt, locale)}
+                </li>
+              ))}
+            </ol>
             <p>{t(locale, "eta")}: {data?.eta ? formatWhen(data.eta, locale) : "—"}</p>
             <p>{t(locale, "phone")}: {next.phone}</p>
             <div className="mt-4 grid grid-cols-2 gap-3">

@@ -4,6 +4,7 @@ import { t, type MessageKey } from "@vardia/shared";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { Logo } from "@/components/logo";
 import { LanguageToggle } from "@/components/shell";
 import { useAuth, useRequire } from "@/lib/auth";
 
@@ -52,14 +53,14 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <button type="button" aria-label={t(locale, "menu")} className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border text-lg" onClick={() => setOpen(true)}>
           ☰
         </button>
-        <p className="text-lg font-semibold text-primary">{t(locale, "brand")}</p>
+        <Logo />
       </header>
       {open ? (
         <div className="fixed inset-0 z-50 md:hidden">
           <button type="button" aria-label={t(locale, "menu")} className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
           <aside className="absolute inset-y-0 left-0 flex w-[min(20rem,86vw)] flex-col bg-white p-4 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-xl font-semibold text-primary">{t(locale, "brand")}</p>
+              <Logo />
               <button type="button" className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border" onClick={() => setOpen(false)}>
                 ×
               </button>
@@ -75,7 +76,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </div>
       ) : null}
       <aside className="hidden border-r border-border md:flex md:min-h-screen md:flex-col">
-        <div className="px-5 py-6 text-xl font-semibold text-primary">{t(locale, "brand")}</div>
+        <div className="px-5 py-6"><Logo /></div>
         <div className="px-3">
           <NavLinks path={path} />
         </div>

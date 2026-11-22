@@ -35,7 +35,10 @@ export default function ShiftsPage() {
           <li key={shift.id} className="rounded-2xl border border-border px-4 py-4">
             <p className="text-lg">{shift.driver.name}</p>
             <p className="text-sm text-muted-foreground">{formatWhen(shift.startsAt, locale)} · {shift.truck.plate} · {shift.truck.binType}</p>
-            <Button className="mt-3" variant="outline" onClick={() => { setCopyId(shift.id); setStep(0); setDates([]); }}>{t(locale, "copyShifts")}</Button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button className="min-h-11" variant="outline" onClick={() => { setCopyId(shift.id); setStep(0); setDates([]); }}>{t(locale, "copyShifts")}</Button>
+              <Button className="min-h-11" variant="outline" onClick={() => void api(`/admin/shifts/${shift.id}`, { method: "DELETE" }, token).then(() => setShifts((current) => current.filter((item) => item.id !== shift.id)))}>{t(locale, "deleteShift")}</Button>
+            </div>
           </li>
         ))}
       </ul>

@@ -10,7 +10,7 @@ const sans = Manrope({ subsets: ["latin", "greek"], variable: "--font-manrope" }
 const serif = Source_Serif_4({ subsets: ["latin", "greek"], variable: "--font-source" });
 
 export const metadata: Metadata = {
-  title: "Αποκομιδή",
+  title: "APPkomidi",
   description: "Ραντεβού αποκομιδής για επιχειρήσεις. Commercial waste pickup appointments.",
 };
 

@@ -12,7 +12,7 @@ async function nominatim(path: string) {
   lastCall = Date.now();
   const response = await fetch(`${env.nominatimUrl}${path}`, {
     headers: {
-      "User-Agent": "Vardia/0.1 (hackathon demo; admin@vardia.gr)",
+      "User-Agent": "APPkomidi/0.1 (municipal waste demo)",
       Accept: "application/json",
     },
     signal: AbortSignal.timeout(8000),

@@ -106,7 +106,7 @@ export default function DriverScreen() {
           <Text style={{ fontSize: 22, fontWeight: "700" }}>{next.business}</Text>
           <Text style={{ marginTop: 4, color: "#5c6b62" }}>{next.label}</Text>
           <Text style={{ marginTop: 8 }}>{t(locale, `bin_${next.binType}` as MessageKey)} · {t(locale, `bracket_${next.bracket}` as MessageKey)}</Text>
-          <Text>{t(locale, "windowLabel")}: {formatWhen(next.scheduledAt, locale)}</Text>
+          <Text>{t(locale, "windowLabel")}: {formatWhen(next.scheduledAt, locale)} {t(locale, "windowFlex")}</Text>
           <Text>{t(locale, "eta")}: {data?.eta ? formatWhen(data.eta, locale) : "—"}</Text>
           <Text>{next.phone}</Text>
           <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>

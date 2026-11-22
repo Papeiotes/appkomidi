@@ -1,7 +1,7 @@
 export type Locale = "el" | "en";
 
 const messages = {
-  brand: { el: "Αποκομιδή", en: "Collection" },
+  brand: { el: "APPkomidi", en: "APPkomidi" },
   tagline: { el: "Ραντεβού αποκομιδής για επιχειρήσεις του Δήμου.", en: "Pickup appointments for shops in the municipality." },
   cityBrand: { el: "Δήμος Αθηναίων", en: "Municipality of Athens" },
   loginSubtitle: {
@@ -83,8 +83,8 @@ const messages = {
   bracket_KG_20_50: { el: "20–50 kg", en: "20–50 kg" },
   bracket_KG_50_PLUS: { el: "50+ kg", en: "50+ kg" },
   disclaimer: {
-    el: "Η ώρα άφιξης μπορεί να διαφέρει ±15 λεπτά.",
-    en: "Arrival time may vary by ±15 minutes.",
+    el: "Η ώρα άφιξης μπορεί να διαφέρει ±30 λεπτά.",
+    en: "Arrival time may vary by ±30 minutes.",
   },
   book: { el: "Κράτηση", en: "Book" },
   suggested: { el: "Προτεινόμενη ώρα", en: "Suggested time" },
@@ -171,7 +171,12 @@ const messages = {
   OUTSIDE_SHIFT: { el: "Η ώρα είναι έξω από τη βάρδια.", en: "That time is outside the shift." },
   OUTSIDE_HORIZON: { el: "Μπορείς να κλείσεις έως 7 ημέρες μπροστά.", en: "You can book up to 7 days ahead." },
   IN_THE_PAST: { el: "Η ώρα έχει περάσει.", en: "That time has passed." },
-  NOT_ALIGNED: { el: "Οι ώρες είναι ανά 15 λεπτά.", en: "Times are every 15 minutes." },
+  NOT_ALIGNED: { el: "Οι ώρες είναι ανά 30 λεπτά.", en: "Times are every 30 minutes." },
+  ROUTE_INFEASIBLE: { el: "Η ώρα δεν χωράει στη διαδρομή.", en: "That time does not fit the route." },
+  windowFlex: { el: "±30 λεπτά", en: "±30 min" },
+  repeatWeekly: { el: "Επανάληψη κάθε εβδομάδα", en: "Repeat every week" },
+  deleteShift: { el: "Διαγραφή βάρδιας", en: "Delete shift" },
+  editShift: { el: "Αλλαγή βάρδιας", en: "Edit shift" },
   SLOT_CLOSED: { el: "Το γραφείο έκλεισε αυτή την ώρα.", en: "The office closed this time." },
   TOO_LATE: { el: "Ακύρωση μόνο έως 15 λεπτά πριν.", en: "You can cancel only until 15 minutes before." },
   NOT_CANCELLABLE: { el: "Αυτό το ραντεβού δεν ακυρώνεται.", en: "This pickup cannot be cancelled." },

@@ -13,7 +13,7 @@ async function main() {
   app.set("io", io);
   attachSocket(io);
   server.listen(env.port, "0.0.0.0", () => {
-    console.log(`Vardia API on http://localhost:${env.port}`);
+    console.log(`APPkomidi API on http://localhost:${env.port}`);
   });
 }
 

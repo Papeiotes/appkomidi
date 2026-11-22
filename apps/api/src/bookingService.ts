@@ -3,6 +3,7 @@ import {
   assignUnderLock,
   evaluateCancel,
   kgForBracket,
+  optimizeRoute,
   type BinType,
   type QuantityBracket,
 } from "@vardia/shared";
@@ -66,8 +67,26 @@ export async function createBooking(input: {
     const result = await assignUnderLock({
       lockShifts: () => lockCompatible(tx, business.municipalityId, input.binType, input.scheduledAt),
       load: () => loadCompatible(tx, business.municipalityId, input.binType, input.scheduledAt),
-      insert: (shiftId) =>
-        tx.booking.create({
+      insert: async (shiftId) => {
+        const shift = await tx.shift.findUnique({ where: { id: shiftId } });
+        const rows = await tx.booking.findMany({
+          where: { shiftId, status: "CONFIRMED" },
+          include: { business: true },
+        });
+        const planned = optimizeRoute({
+          start: { lat: business.lat, lng: business.lng },
+          now: shift?.startsAt ?? now,
+          stops: [
+            ...rows.map((row) => ({
+              id: row.id,
+              at: { lat: row.business.lat, lng: row.business.lng },
+              scheduledAt: row.scheduledAt.toISOString(),
+            })),
+            { id: "new", at: { lat: business.lat, lng: business.lng }, scheduledAt: input.scheduledAt.toISOString() },
+          ],
+        });
+        if (!planned.feasible) throw new BookingError("ROUTE_INFEASIBLE");
+        return tx.booking.create({
           data: {
             municipalityId: business.municipalityId,
             businessId: business.id,
@@ -77,7 +96,8 @@ export async function createBooking(input: {
             kg: requestedKg,
             scheduledAt: input.scheduledAt,
           },
-        }),
+        });
+      },
       scheduledAt: input.scheduledAt,
       now,
       requestedKg,

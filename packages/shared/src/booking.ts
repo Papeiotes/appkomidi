@@ -6,7 +6,8 @@ export class BookingError extends Error {
 }
 
 export const SERVICE_MINUTES = 15;
-export const FLEX_MINUTES = 15;
+export const FLEX_MINUTES = 30;
+export const SLOT_MINUTES = 30;
 export const CANCEL_CUTOFF_MINUTES = 15;
 export const HORIZON_DAYS = 7;
 export const SHIFT_HOURS = 6;
@@ -38,8 +39,9 @@ export function kgForBracket(bracket: QuantityBracket, overflowKg = DEFAULT_OVER
   return overflowKg;
 }
 
+/** Booked times sit on a 30-minute grid. */
 export function isQuarterHour(date: Date): boolean {
-  return date.getUTCSeconds() === 0 && date.getUTCMilliseconds() === 0 && date.getUTCMinutes() % 15 === 0;
+  return date.getUTCSeconds() === 0 && date.getUTCMilliseconds() === 0 && date.getUTCMinutes() % SLOT_MINUTES === 0;
 }
 
 export function shiftEndsAt(startsAt: Date): Date {
@@ -169,8 +171,10 @@ export async function assignUnderLock<TBooking>(opts: {
 }
 
 export function slotInstants(startsAt: Date, endsAt: Date): Date[] {
+  const step = SLOT_MINUTES * 60_000;
   const out: Date[] = [];
-  for (let t = startsAt.getTime(); t + SERVICE_MINUTES * 60_000 <= endsAt.getTime(); t += SERVICE_MINUTES * 60_000) {
+  const first = Math.ceil(startsAt.getTime() / step) * step;
+  for (let t = first; t + SERVICE_MINUTES * 60_000 <= endsAt.getTime(); t += step) {
     out.push(new Date(t));
   }
   return out;

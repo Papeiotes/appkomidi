@@ -1,4 +1,4 @@
-import { kgForBracket, slotInstants, suggestSlot, type BinType, type QuantityBracket } from "@vardia/shared";
+import { kgForBracket, optimizeRoute, rankSlots, slotInstants, type BinType, type QuantityBracket } from "@vardia/shared";
 import { Router } from "express";
 import type { Server } from "socket.io";
 import { z } from "zod";
@@ -64,8 +64,23 @@ bookingsRouter.get(
         const remaining = shift.truck.capacityKg - used;
         const current = map.get(key);
         const slotRemaining = closed.has(key) ? 0 : remaining;
+        const existing = shift.bookings.map((booking) => ({
+          id: booking.id,
+          at: { lat: booking.business.lat, lng: booking.business.lng },
+          scheduledAt: booking.scheduledAt.toISOString(),
+        }));
+        const fits =
+          slotRemaining >= needed &&
+          optimizeRoute({
+            start: { lat: business.lat, lng: business.lng },
+            now: shift.startsAt,
+            stops: [
+              ...existing,
+              { id: "new", at: { lat: business.lat, lng: business.lng }, scheduledAt: key },
+            ],
+          }).feasible;
         if (!current || slotRemaining > current.remainingKg) {
-          map.set(key, { at: key, remainingKg: Math.max(0, slotRemaining), bookable: slotRemaining >= needed });
+          map.set(key, { at: key, remainingKg: Math.max(0, slotRemaining), bookable: fits });
         }
       }
     }
@@ -77,10 +92,17 @@ bookingsRouter.get(
           booking.businessId !== business.id &&
           haversineMeters(business, { lat: booking.business.lat, lng: booking.business.lng }) < 800,
       );
-    const suggested = suggestSlot(
-      slots.filter((slot) => slot.bookable).map((slot) => slot.at),
-      nearby.map((booking) => booking.scheduledAt.toISOString()),
-    );
+    const ranked = rankSlots({
+      start: { lat: business.lat, lng: business.lng },
+      now,
+      existing: nearby.map((booking) => ({
+        id: booking.id,
+        at: { lat: booking.business.lat, lng: booking.business.lng },
+        scheduledAt: booking.scheduledAt.toISOString(),
+      })),
+      candidates: slots.filter((slot) => slot.bookable).map((slot) => ({ at: slot.at, point: { lat: business.lat, lng: business.lng } })),
+    });
+    const suggested = ranked.find((slot) => slot.feasible)?.at ?? null;
     res.json({
       slots: slots.map((slot) => ({ at: slot.at, bookable: slot.bookable })),
       suggested,
