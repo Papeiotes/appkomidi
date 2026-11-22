@@ -1,8 +1,9 @@
 import { formatWhen, t, type MessageKey } from "@vardia/shared";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import type { WebView } from "react-native-webview";
 import { Leaflet } from "../src/leaflet";
 import { liveHtml } from "../src/map-html";
 import { explain, useSession } from "../src/session";
@@ -18,6 +19,14 @@ export default function DriverScreen() {
   const [data, setData] = useState<Payload | null>(null);
   const [menu, setMenu] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mapHtml = useRef(liveHtml(37.9838, 23.7275)).current;
+  const mapRef = useRef<WebView>(null);
+  const nextRef = useRef<{ lat: number; lng: number } | null>(null);
+
+  function moveVan(lat: number, lng: number, stop?: { lat: number; lng: number } | null) {
+    const line = stop ? `window.setStop && window.setStop(${stop.lat}, ${stop.lng}); window.setLine && window.setLine([[${lat}, ${lng}], [${stop.lat}, ${stop.lng}]]);` : "";
+    mapRef.current?.injectJavaScript(`window.setVan && window.setVan(${lat}, ${lng}); ${line} true;`);
+  }
 
   async function load() {
     setData(await session.api<Payload>("/driver/shift"));
@@ -34,10 +43,13 @@ export default function DriverScreen() {
     let sub: Location.LocationSubscription | null = null;
     void Location.requestForegroundPermissionsAsync().then(async (permission) => {
       if (!permission.granted || !data.shift) return;
-      sub = await Location.watchPositionAsync({ distanceInterval: 20, timeInterval: 5000 }, (position) => {
+      sub = await Location.watchPositionAsync({ distanceInterval: 8, timeInterval: 2000 }, (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        moveVan(lat, lng, nextRef.current);
         void session.api(`/driver/shifts/${data.shift!.id}/location`, {
           method: "POST",
-          body: JSON.stringify({ lat: position.coords.latitude, lng: position.coords.longitude }),
+          body: JSON.stringify({ lat, lng }),
         });
       });
     });
@@ -46,11 +58,16 @@ export default function DriverScreen() {
 
   const shift = data?.shift;
   const next = data?.stops.find((stop) => stop.id === data?.nextStopId);
-  const center = next ?? { lat: 37.9838, lng: 23.7275 };
+  nextRef.current = next ?? null;
+
+  useEffect(() => {
+    if (shift?.lastLat == null || shift.lastLng == null) return;
+    moveVan(shift.lastLat, shift.lastLng, next ?? null);
+  }, [shift?.lastLat, shift?.lastLng, next?.id]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
-      <Leaflet html={liveHtml(center.lat, center.lng)} />
+      <Leaflet ref={mapRef} html={mapHtml} />
       <Pressable style={{ position: "absolute", top: 48, right: 16, backgroundColor: "#fff", borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 }} onPress={() => setMenu((open) => !open)}>
         <Text>{t(locale, "menu")}</Text>
       </Pressable>

@@ -1,6 +1,6 @@
 "use client";
 
-import { formatWhen, t } from "@vardia/shared";
+import { athensDatePlus, formatWhen, t } from "@vardia/shared";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Wizard } from "@/components/wizard";
@@ -19,11 +19,7 @@ export default function ShiftsPage() {
   useEffect(() => {
     if (token) api<{ shifts: Shift[] }>("/admin/shifts", {}, token).then((body) => setShifts(body.shifts));
   }, [token]);
-  const upcoming = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date();
-    date.setDate(date.getDate() + index + 1);
-    return date.toISOString().slice(0, 10);
-  });
+  const upcoming = Array.from({ length: 7 }, (_, index) => athensDatePlus(index + 1));
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">

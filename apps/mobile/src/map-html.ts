@@ -25,11 +25,28 @@ export function liveHtml(lat: number, lng: number) {
 <script>
 const map = L.map('map').setView([${lat}, ${lng}], 14);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap'}).addTo(map);
-let van = L.circleMarker([${lat}, ${lng}], {radius:8, color:'#1c2416', fillColor:'#e39b2b', fillOpacity:1}).addTo(map);
-window.setVan = (lat, lng) => { van.setLatLng([lat, lng]); map.panTo([lat, lng]); };
+let van = L.circleMarker([${lat}, ${lng}], {radius:9, color:'#142018', weight:3, fillColor:'#1b7f4a', fillOpacity:1}).addTo(map);
+let stop = null;
+let anim = 0;
+window.setVan = (lat, lng) => {
+  const from = van.getLatLng();
+  const started = performance.now();
+  cancelAnimationFrame(anim);
+  const step = (now) => {
+    const t = Math.min(1, (now - started) / 800);
+    van.setLatLng([from.lat + (lat - from.lat) * t, from.lng + (lng - from.lng) * t]);
+    if (t < 1) anim = requestAnimationFrame(step);
+  };
+  anim = requestAnimationFrame(step);
+};
+window.setStop = (lat, lng) => {
+  if (!stop) stop = L.circleMarker([lat, lng], {radius:7, color:'#1b7f4a', fillColor:'#ffffff', fillOpacity:1, weight:3}).addTo(map);
+  else stop.setLatLng([lat, lng]);
+};
 window.setLine = (pairs) => {
   if (window.line) map.removeLayer(window.line);
-  window.line = L.polyline(pairs, {color:'#2f4a34', weight:4}).addTo(map);
+  if (!pairs || pairs.length < 2) return;
+  window.line = L.polyline(pairs, {color:'#1b7f4a', weight:4}).addTo(map);
 };
 </script></body></html>`;
 }

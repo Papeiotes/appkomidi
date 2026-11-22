@@ -1,4 +1,4 @@
-import { assignSubArea, isValidAfm, isValidLatLng, shiftEndsAt, OFFICE_PERMISSIONS } from "@vardia/shared";
+import { assignSubArea, copyAthensClock, isValidAfm, isValidLatLng, shiftEndsAt, OFFICE_PERMISSIONS } from "@vardia/shared";
 import { Router } from "express";
 import type { Server } from "socket.io";
 import { z } from "zod";
@@ -275,7 +275,8 @@ adminRouter.post(
     if (!source) throw new HttpError(404, "NOT_FOUND");
     const created = [];
     for (const date of body.dates) {
-      const startsAt = new Date(`${date}T${source.startsAt.toISOString().slice(11, 19)}.000Z`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpError(400, "BAD_INPUT");
+      const startsAt = copyAthensClock(source.startsAt, date);
       const endsAt = shiftEndsAt(startsAt);
       created.push(
         await prisma.shift.create({

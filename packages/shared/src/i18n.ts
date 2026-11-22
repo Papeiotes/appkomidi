@@ -40,6 +40,8 @@ const messages = {
   windowLabel: { el: "Παράθυρο άφιξης", en: "Arrival window" },
   more: { el: "Περισσότερα", en: "More" },
   emptyNext: { el: "Ξεκίνα με το πράσινο κουμπί.", en: "Start with the green button." },
+  undoPoint: { el: "Αναίρεση σημείου", en: "Undo last point" },
+  finishPolygon: { el: "Τέλος πολυγώνου", en: "Finish polygon" },
   registerTitle: { el: "Εγγραφή επιχείρησης", en: "Business registration" },
   businessName: { el: "Επωνυμία", en: "Business name" },
   afm: { el: "ΑΦΜ", en: "VAT number" },
