@@ -26,7 +26,18 @@ accountRouter.patch(
         locale: body.locale,
       },
     });
-    res.json({ user: publicUser(user) });
+    res.json({
+      user: publicUser({
+        id: user.id,
+        role: user.role,
+        username: user.username,
+        name: user.name,
+        locale: user.locale,
+        phone: user.phone,
+        municipalityId: user.municipalityId,
+        permissions: user.permissions,
+      }),
+    });
   }),
 );
 

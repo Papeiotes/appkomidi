@@ -10,8 +10,8 @@ const sans = Manrope({ subsets: ["latin", "greek"], variable: "--font-manrope" }
 const serif = Source_Serif_4({ subsets: ["latin", "greek"], variable: "--font-source" });
 
 export const metadata: Metadata = {
-  title: "Βάρδια",
-  description: "Μεταφορά προσωπικού για βάρδιες. Staff shuttles for shift work.",
+  title: "Αποκομιδή",
+  description: "Ραντεβού αποκομιδής για επιχειρήσεις. Commercial waste pickup appointments.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -28,9 +28,11 @@ services:
       PORT: 4107
       NOMINATIM_URL: https://nominatim.openstreetmap.org
       OSRM_URL: https://router.project-osrm.org
-      ADMIN_EMAIL: admin@vardia.gr
-      ADMIN_PASSWORD: VardiaAdmin!2026
-      ADMIN_NAME: Διαχειριστής Βάρδιας
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: Dimarcheio!2026
+      ADMIN_NAME: Διαχειριστής
+      MUNICIPALITY_NAME: Δήμος
+      OVERFLOW_KG: 75
     ports:
       - "4107:4107"
     restart: on-failure

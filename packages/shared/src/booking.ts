@@ -1,17 +1,3 @@
-export const MAX_SEATS_PER_BOOKING = 4;
-export const DEFAULT_LOCK_MINUTES = 30;
-export const MAX_SHIFT_CAPACITY = 60;
-
-export type ShiftStatus =
-  | "DRAFT"
-  | "OPEN"
-  | "LOCKED"
-  | "IN_PROGRESS"
-  | "COMPLETED"
-  | "CANCELLED";
-
-export type BookingStatus = "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
-
 export class BookingError extends Error {
   constructor(public code: string) {
     super(code);
@@ -19,172 +5,120 @@ export class BookingError extends Error {
   }
 }
 
-export interface BookingDecisionInput {
-  shiftStatus: ShiftStatus;
-  capacity: number;
-  confirmedSeats: number;
-  alreadyBooked: boolean;
-  requestedSeats: number;
+export const SERVICE_MINUTES = 15;
+export const FLEX_MINUTES = 15;
+export const CANCEL_CUTOFF_MINUTES = 15;
+export const HORIZON_DAYS = 7;
+export const SHIFT_HOURS = 6;
+export const DEFAULT_OVERFLOW_KG = 75;
+
+export const BRACKETS = ["KG_0_10", "KG_10_20", "KG_20_50", "KG_50_PLUS"] as const;
+export type QuantityBracket = (typeof BRACKETS)[number];
+
+export const BIN_TYPES = ["GREEN", "BLUE", "YELLOW", "BROWN"] as const;
+export type BinType = (typeof BIN_TYPES)[number];
+
+export type ShiftRunStatus = "SCHEDULED" | "IN_PROGRESS" | "PAUSED" | "ENDED";
+export type BookingStatus = "CONFIRMED" | "CANCELLED" | "COMPLETED";
+
+export const OFFICE_PERMISSIONS = [
+  "bookings.view",
+  "bookings.reschedule",
+  "bookings.cancel",
+  "bookings.question",
+  "slots.toggle",
+  "stats.view",
+] as const;
+export type OfficePermission = (typeof OFFICE_PERMISSIONS)[number];
+
+export function kgForBracket(bracket: QuantityBracket, overflowKg = DEFAULT_OVERFLOW_KG): number {
+  if (bracket === "KG_0_10") return 10;
+  if (bracket === "KG_10_20") return 20;
+  if (bracket === "KG_20_50") return 50;
+  return overflowKg;
+}
+
+export function isQuarterHour(date: Date): boolean {
+  return date.getUTCSeconds() === 0 && date.getUTCMilliseconds() === 0 && date.getUTCMinutes() % 15 === 0;
+}
+
+export function shiftEndsAt(startsAt: Date): Date {
+  return new Date(startsAt.getTime() + SHIFT_HOURS * 60 * 60 * 1000);
+}
+
+export interface CapacityInput {
+  shiftStatus: ShiftRunStatus;
+  startsAt: Date;
+  endsAt: Date;
+  scheduledAt: Date;
   now: Date;
-  departsAt: Date;
-  lockMinutes: number;
-  maxSeatsPerBooking?: number;
+  capacityKg: number;
+  usedKg: number;
+  requestedKg: number;
+  slotClosed: boolean;
+  horizonDays?: number;
 }
 
 export type Decision = { ok: true; remainingAfter: number } | { ok: false; code: string };
 
-export function remainingSeats(capacity: number, confirmedSeats: number): number {
-  return Math.max(0, capacity - confirmedSeats);
-}
-
-/** Bookings close this many minutes before departure, even if the row still says OPEN. */
-export function isLockedByTime(now: Date, departsAt: Date, lockMinutes: number): boolean {
-  return now.getTime() >= departsAt.getTime() - lockMinutes * 60_000;
-}
-
-export function evaluateBooking(input: BookingDecisionInput): Decision {
-  const max = input.maxSeatsPerBooking ?? MAX_SEATS_PER_BOOKING;
-  if (!Number.isInteger(input.requestedSeats) || input.requestedSeats < 1) {
-    return { ok: false, code: "INVALID_SEATS" };
+export function evaluateCapacity(input: CapacityInput): Decision {
+  if (!Number.isInteger(input.requestedKg) || input.requestedKg <= 0) {
+    return { ok: false, code: "INVALID_KG" };
   }
-  if (input.requestedSeats > max) {
-    return { ok: false, code: "TOO_MANY_SEATS" };
+  if (!isQuarterHour(input.scheduledAt)) return { ok: false, code: "NOT_ALIGNED" };
+  const horizon = input.horizonDays ?? HORIZON_DAYS;
+  if (input.scheduledAt.getTime() <= input.now.getTime()) return { ok: false, code: "IN_THE_PAST" };
+  if (input.scheduledAt.getTime() > input.now.getTime() + horizon * 24 * 60 * 60_000) {
+    return { ok: false, code: "OUTSIDE_HORIZON" };
   }
-  if (input.shiftStatus === "LOCKED" || isLockedByTime(input.now, input.departsAt, input.lockMinutes)) {
-    return { ok: false, code: "SHIFT_LOCKED" };
+  if (input.shiftStatus !== "SCHEDULED") return { ok: false, code: "SHIFT_STARTED" };
+  const serviceEnd = input.scheduledAt.getTime() + SERVICE_MINUTES * 60_000;
+  if (input.scheduledAt < input.startsAt || serviceEnd > input.endsAt.getTime()) {
+    return { ok: false, code: "OUTSIDE_SHIFT" };
   }
-  if (input.shiftStatus !== "OPEN") {
-    return { ok: false, code: "SHIFT_NOT_OPEN" };
-  }
-  if (input.alreadyBooked) {
-    return { ok: false, code: "ALREADY_BOOKED" };
-  }
-  const remaining = remainingSeats(input.capacity, input.confirmedSeats);
-  if (input.requestedSeats > remaining) {
-    return { ok: false, code: "SHIFT_FULL" };
-  }
-  return { ok: true, remainingAfter: remaining - input.requestedSeats };
+  if (input.slotClosed) return { ok: false, code: "SLOT_CLOSED" };
+  if (input.usedKg + input.requestedKg > input.capacityKg) return { ok: false, code: "TRUCK_FULL" };
+  return { ok: true, remainingAfter: input.capacityKg - input.usedKg - input.requestedKg };
 }
 
 export function evaluateCancel(input: {
-  bookingStatus: BookingStatus | null;
-  shiftStatus: ShiftStatus;
+  status: BookingStatus;
+  scheduledAt: Date;
   now: Date;
-  departsAt: Date;
-  lockMinutes: number;
 }): { ok: true } | { ok: false; code: string } {
-  if (input.bookingStatus !== "CONFIRMED") {
-    return { ok: false, code: "NOT_CANCELLABLE" };
-  }
-  if (input.shiftStatus === "IN_PROGRESS" || input.shiftStatus === "COMPLETED" || input.shiftStatus === "CANCELLED") {
-    return { ok: false, code: "SHIFT_NOT_CANCELLABLE" };
-  }
-  if (input.shiftStatus === "LOCKED" || isLockedByTime(input.now, input.departsAt, input.lockMinutes)) {
-    return { ok: false, code: "SHIFT_LOCKED" };
+  if (input.status !== "CONFIRMED") return { ok: false, code: "NOT_CANCELLABLE" };
+  if (input.now.getTime() >= input.scheduledAt.getTime() - CANCEL_CUTOFF_MINUTES * 60_000) {
+    return { ok: false, code: "TOO_LATE" };
   }
   return { ok: true };
 }
 
-export function evaluateStart(status: ShiftStatus): { ok: true } | { ok: false; code: string } {
-  if (status === "OPEN" || status === "LOCKED") return { ok: true };
-  if (status === "IN_PROGRESS") return { ok: false, code: "ALREADY_STARTED" };
-  return { ok: false, code: "CANNOT_START" };
+export function isValidAfm(afm: string): boolean {
+  if (!/^\d{9}$/.test(afm) || afm === "000000000") return false;
+  let sum = 0;
+  for (let i = 0; i < 8; i++) sum += Number(afm[i]) * 2 ** (8 - i);
+  let check = sum % 11;
+  if (check === 10) check = 0;
+  return check === Number(afm[8]);
 }
 
-export function evaluateComplete(status: ShiftStatus): { ok: true } | { ok: false; code: string } {
-  if (status === "IN_PROGRESS") return { ok: true };
-  return { ok: false, code: "CANNOT_COMPLETE" };
-}
-
-export function assertShiftCapacity(
-  capacity: number,
-  vehicleSeats: number | null,
-): { ok: true } | { ok: false; code: "INVALID_CAPACITY" | "VEHICLE_TOO_SMALL" } {
-  if (!Number.isInteger(capacity) || capacity < 1 || capacity > MAX_SHIFT_CAPACITY) {
-    return { ok: false, code: "INVALID_CAPACITY" };
-  }
-  if (vehicleSeats != null && capacity > vehicleSeats) {
-    return { ok: false, code: "VEHICLE_TOO_SMALL" };
-  }
-  return { ok: true };
-}
-
-export interface LockedShiftView {
+export interface ShiftCapacityView {
   id: string;
-  status: ShiftStatus;
-  capacity: number;
-  confirmedSeats: number;
-  passengerIds: string[];
-  departsAt: string;
-  lockMinutes: number;
+  status: ShiftRunStatus;
+  startsAt: string;
+  endsAt: string;
+  capacityKg: number;
+  usedKg: number;
+  closedSlots: string[];
 }
 
-/**
- * The decision step that runs while a shift row is locked.
- * Callers must serialize `lockShift` per shift (Postgres `SELECT … FOR UPDATE`,
- * or `createSerialShiftLock` in-process) and `load` must observe bookings
- * committed by the previous holder of that lock.
- */
-export async function bookInTransaction<TBooking>(opts: {
-  lockShift: () => Promise<void>;
-  load: () => Promise<LockedShiftView | null>;
-  insert: (seats: number) => Promise<TBooking>;
-  requestedSeats: number;
-  userId: string;
-  now: Date;
-}): Promise<{ ok: true; booking: TBooking; remainingAfter: number } | { ok: false; code: string }> {
-  await opts.lockShift();
-  const shift = await opts.load();
-  if (!shift) return { ok: false, code: "SHIFT_NOT_FOUND" };
-  const decision = evaluateBooking({
-    shiftStatus: shift.status,
-    capacity: shift.capacity,
-    confirmedSeats: shift.confirmedSeats,
-    alreadyBooked: shift.passengerIds.includes(opts.userId),
-    requestedSeats: opts.requestedSeats,
-    now: opts.now,
-    departsAt: new Date(shift.departsAt),
-    lockMinutes: shift.lockMinutes,
-  });
-  if (!decision.ok) return decision;
-  const booking = await opts.insert(opts.requestedSeats);
-  return { ok: true, booking, remainingAfter: decision.remainingAfter };
-}
-
-export async function cancelInTransaction<TBooking>(opts: {
-  lockShift: () => Promise<void>;
-  load: () => Promise<{
-    shiftStatus: ShiftStatus;
-    departsAt: string;
-    lockMinutes: number;
-    bookingStatus: BookingStatus | null;
-  } | null>;
-  cancel: () => Promise<TBooking>;
-  now: Date;
-}): Promise<{ ok: true; booking: TBooking } | { ok: false; code: string }> {
-  await opts.lockShift();
-  const row = await opts.load();
-  if (!row) return { ok: false, code: "BOOKING_NOT_FOUND" };
-  const decision = evaluateCancel({
-    bookingStatus: row.bookingStatus,
-    shiftStatus: row.shiftStatus,
-    now: opts.now,
-    departsAt: new Date(row.departsAt),
-    lockMinutes: row.lockMinutes,
-  });
-  if (!decision.ok) return decision;
-  const booking = await opts.cancel();
-  return { ok: true, booking };
-}
-
-/** In-process stand-in for a row lock: one shift, one runner at a time. */
-export function createSerialShiftLock(): <T>(shiftId: string, fn: () => Promise<T>) => Promise<T> {
+export function createSerialShiftLock(): <T>(key: string, fn: () => Promise<T>) => Promise<T> {
   const tails = new Map<string, Promise<unknown>>();
-  return function run<T>(shiftId: string, fn: () => Promise<T>): Promise<T> {
-    const prev = tails.get(shiftId) ?? Promise.resolve();
+  return function run<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const prev = tails.get(key) ?? Promise.resolve();
     const next = prev.then(fn, fn);
     tails.set(
-      shiftId,
+      key,
       next.then(
         () => undefined,
         () => undefined,
@@ -192,4 +126,62 @@ export function createSerialShiftLock(): <T>(shiftId: string, fn: () => Promise<
     );
     return next;
   };
+}
+
+/**
+ * Assign a pickup to the first compatible shift that still has kilograms,
+ * while those shifts are locked in a stable order (Postgres FOR UPDATE).
+ */
+export async function assignUnderLock<TBooking>(opts: {
+  lockShifts: () => Promise<void>;
+  load: () => Promise<ShiftCapacityView[]>;
+  insert: (shiftId: string) => Promise<TBooking>;
+  scheduledAt: Date;
+  now: Date;
+  requestedKg: number;
+}): Promise<{ ok: true; booking: TBooking; shiftId: string; remainingAfter: number } | { ok: false; code: string }> {
+  await opts.lockShifts();
+  const shifts = await opts.load();
+  if (shifts.length === 0) return { ok: false, code: "NO_SHIFT" };
+  let saw = false;
+  let lastCode = "NO_SHIFT";
+  for (const shift of shifts) {
+    saw = true;
+    const decision = evaluateCapacity({
+      shiftStatus: shift.status,
+      startsAt: new Date(shift.startsAt),
+      endsAt: new Date(shift.endsAt),
+      scheduledAt: opts.scheduledAt,
+      now: opts.now,
+      capacityKg: shift.capacityKg,
+      usedKg: shift.usedKg,
+      requestedKg: opts.requestedKg,
+      slotClosed: shift.closedSlots.includes(opts.scheduledAt.toISOString()),
+    });
+    if (!decision.ok) {
+      lastCode = decision.code;
+      continue;
+    }
+    const booking = await opts.insert(shift.id);
+    return { ok: true, booking, shiftId: shift.id, remainingAfter: decision.remainingAfter };
+  }
+  return { ok: false, code: saw ? lastCode : "NO_SHIFT" };
+}
+
+export function slotInstants(startsAt: Date, endsAt: Date): Date[] {
+  const out: Date[] = [];
+  for (let t = startsAt.getTime(); t + SERVICE_MINUTES * 60_000 <= endsAt.getTime(); t += SERVICE_MINUTES * 60_000) {
+    out.push(new Date(t));
+  }
+  return out;
+}
+
+export function suggestSlot(bookable: string[], nearbyTimes: string[]): string | null {
+  if (bookable.length === 0) return null;
+  if (nearbyTimes.length === 0) return bookable[0];
+  const mean =
+    nearbyTimes.reduce((sum, iso) => sum + new Date(iso).getTime(), 0) / nearbyTimes.length;
+  return [...bookable].sort(
+    (a, b) => Math.abs(new Date(a).getTime() - mean) - Math.abs(new Date(b).getTime() - mean),
+  )[0];
 }

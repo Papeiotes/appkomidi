@@ -1,30 +1,23 @@
-# Βάρδια / Vardia
+# Αποκομιδή / Collection
 
-Shift shuttles for businesses that clock in together. A workplace pin, an admin approval, seats with a hard capacity, a driver route, and a notification when the van is inside 50 metres.
+Appointment booking for commercial waste pickup in a Greek municipality. A shop registers with one address and a draggable pin, the municipality approves it, and the shop books a green, blue, yellow, or brown bin. Kilograms are checked against the truck on a 6-hour shift. The driver starts once, the stop order locks, and the shop sees the truck until it is within 50 metres.
 
-Μεταφορά προσωπικού για επιχειρήσεις που δουλεύουν με βάρδιες. Καρφίτσα στην έδρα, έγκριση από διαχειριστή, θέσεις με κλειδωμένη χωρητικότητα, διαδρομή οδηγού, και ειδοποίηση όταν το βαν μπει στα 50 μέτρα.
+Ραντεβού αποκομιδής για επιχειρήσεις ενός Δήμου. Η επιχείρηση δηλώνει μία διεύθυνση και καρφίτσα, ο Δήμος εγκρίνει, και κλείνει κάδο (πράσινο, μπλε, κίτρινο, καφέ). Τα κιλά ελέγχονται πάνω στο απορριμματοφόρο μιας βάρδιας 6 ωρών. Ο οδηγός πατά έναρξη, η σειρά κλειδώνει, και η επιχείρηση βλέπει το όχημα ώσπου να μπει στα 50 μέτρα.
 
-Maps are OpenStreetMap tiles, Nominatim search, and OSRM routes. No Google key.
+Maps are OpenStreetMap, Nominatim, and OSRM. No Google key.
 
-## English
-
-### What you get
-
-- Web (Next.js) for the business, the admin, the employee, and the driver.
-- Phone app (Expo) for the employee and the driver, including a draggable workplace pin.
-- API (Node, Prisma, Socket.IO) and Postgres.
-- Greek and English, switchable in the header.
-
-An empty database already contains one admin:
+The database starts empty except for one admin.
 
 | | |
 | --- | --- |
-| Email | `admin@vardia.gr` |
-| Password | `VardiaAdmin!2026` |
+| Username | `admin` |
+| Password | `Dimarcheio!2026` |
 
-### Run everything with Docker
+Change them with `ADMIN_USERNAME` and `ADMIN_PASSWORD`. `OVERFLOW_KG` (default 75) is the weight used for a 50+ booking.
 
-From the repo root, with Docker running:
+## English
+
+### Run with Docker
 
 ```bash
 docker compose up --build
@@ -34,94 +27,58 @@ docker compose up --build
 - API: http://localhost:4107/health
 - Postgres: `localhost:5432`, user `vardia`, password `vardia`, database `vardia`
 
-The API applies migrations and creates the admin on startup. Stop with `Ctrl+C`. Add `-d` to leave it in the background.
+The API migrates and creates the admin when it starts.
 
-### Run the database in Docker and the apps on the host
+### Apps on the host, database in Docker
 
 ```bash
 docker compose up -d db
 pnpm install
 pnpm dev
+pnpm test
 ```
 
-`pnpm dev` copies `.env` files if they are missing, builds the shared package, and starts the API on port **4107** and the web app on port **4108**. The API migrates and seeds on boot.
-
-Useful extras:
-
-```bash
-pnpm test          # booking, capacity, row-lock, and 50 m tests
-pnpm db:migrate    # prisma migrate deploy
-pnpm db:seed       # creates the admin if missing
-pnpm dev:mobile    # Expo, see below
-```
-
-Postgres must already be reachable at `postgresql://vardia:vardia@localhost:5432/vardia` before `pnpm test`. `docker compose up -d db` does that.
+`pnpm dev` starts the API on **4107** and the web app on **4108**.
 
 ### Expo Go
-
-The phone has to reach the computer, so `localhost` on the phone is the phone itself.
 
 ```bash
 cd apps/mobile
 pnpm start
 ```
 
-In Expo Go, open the project from the QR code. On the login screen, set the API address to your computer’s LAN IP, for example `http://192.168.1.20:4107`. The API container publishes `4107` on the host.
+On the phone, set the API address to the computer’s LAN IP, for example `http://192.168.1.20:4107`. `localhost` on the phone is the phone.
 
-- iOS simulator on the same Mac: `http://localhost:4107` works.
-- Android emulator: `http://10.0.2.2:4107`.
+### Demo
 
-Keep the driver screen open while a route is running. Location is sent only in the foreground.
+1. Open http://localhost:4108 and sign in as `admin` / `Dimarcheio!2026`.
+2. Create a driver (Accounts) and a truck: bin type and capacity in kg.
+3. Create a shift: truck, driver, start time. It lasts exactly 6 hours. Slots inside it are every 15 minutes.
+4. In a private window, **Register a business**. Street and number, drag the pin, confirm the location, submit.
+5. As admin, approve the request. The pin can be adjusted. If a sub-area polygon contains the pin, the shop is assigned to it.
+6. As the business, tick one or more bins, pick a kilogram bracket and a time for each, and book. Each bin becomes its own pickup. A time with no remaining kilograms is grey. The second 50+ booking on a 100 kg truck is refused.
+7. Cancel is allowed until 15 minutes before the slot.
+8. As the driver, open **Drive**. The assigned shift is already there. Press **START**. The stop order is computed from the current position and then locked. The route ends at the last stop.
+9. **Simulate 30 m** on the web (or walk the phone) to the current stop. The business sees «Το απορριμματοφόρο έφτασε» and the banner stays until **Ολοκληρώθηκε**.
+10. The driver marks the stop complete. After the last stop the shift ends. Pause freezes progress. GPS still updates while the screen is open.
 
-### Demo walkthrough
-
-1. Open http://localhost:4108 and sign in as the admin above.
-2. In a private window, choose **Register a business**. Search or drag the pin onto the workplace and submit. The business stays pending.
-3. As admin, open **Approvals** and approve it. The invite code appears on the business home.
-4. Register a **driver** (any email, password at least 8 characters).
-5. As the business, add a vehicle if you want, then **New shift**. Set capacity to `1`, put the driver’s email, set the muster pin and the workplace, and choose **Open for booking**.
-6. Register two **employees** with that invite code.
-7. Each employee opens **Book** and takes a seat. The second request is refused: the shift is full. That check runs inside a Postgres row lock.
-8. As the driver, open **Drive**, then the shift, and press **Start route**. The line is an OSRM drive route (a straight line if OSRM is unreachable).
-9. Press **Simulate arrival at 30 m** next to the passenger. The employee gets an in-app notification, «Το βαν είναι κοντά», because 30 m is inside the 50 m ring. The same control exists on the phone.
-10. **Complete** the route. Confirmed seats become completed.
-
-Switch language with **ΕΛ / EN** in the header. The phone has the same toggle.
+Office (a user the admin creates with the Office role) can filter pickups, move or cancel them, and send a question. The business answers from Notifications. Office accounts receive every office permission unless you change the list later.
 
 ### Tests
 
-`packages/shared` checks the booking decision, the cutoff lock, cancellation, start/complete, the in-process lock that lets only `capacity` parallel bookings through, and the 50 m radius.
+`pnpm test` covers bracket weights, the 7-day horizon, the 15-minute cancel cutoff, AFM checksum, slot suggestion, polygon assignment, route order, and a Postgres test where two parallel 50+ bookings fight for 100 kg and only one is stored.
 
-`apps/api` checks the same capacity rule against Postgres: two concurrent bookings for the last seat, one `SHIFT_FULL`, then a cancel that frees the seat, then a duplicate booking refused.
+### Not in this build
 
-### What is not in this build
-
-- Email and SMS. The invite code is shown on screen. Notifications are in-app and over the socket.
-- Password reset by email. A signed-in user can change their password.
-- Card payments, invoicing, ratings.
-- A repeating shift rule. Duplicate makes one draft copy.
-- Background GPS after the driver leaves the screen.
-- A private Nominatim/OSRM instance. The public servers are used, with a one-request-per-second pause for Nominatim and a straight-line route if OSRM fails.
+- Real Expo push tokens. Notifications are in-app and over the socket. The mobile app shows them when it loads notifications or the arrival banner.
+- SMS and email.
+- A private OSRM server. The public demo is used, with a straight line if it does not answer.
+- Reordering a route after START. Going off the line only redraws the path to the same next stop.
+- Photos or failure reasons. Completion is one button.
 
 ## Ελληνικά
 
-### Τι περιλαμβάνει
-
-- Web (Next.js) για επιχείρηση, διαχειριστή, εργαζόμενο και οδηγό.
-- Εφαρμογή τηλεφώνου (Expo) για εργαζόμενο και οδηγό, με συρόμενη καρφίτσα στην έδρα.
-- API (Node, Prisma, Socket.IO) και Postgres.
-- Ελληνικά και αγγλικά, με διακόπτη στην κορυφή.
-
-Σε άδεια βάση υπάρχει ήδη ένας διαχειριστής:
-
-| | |
-| --- | --- |
-| Email | `admin@vardia.gr` |
-| Κωδικός | `VardiaAdmin!2026` |
-
-### Όλα με Docker
-
-Από τη ρίζα του repo, με το Docker σε λειτουργία:
+### Εκκίνηση με Docker
 
 ```bash
 docker compose up --build
@@ -131,63 +88,43 @@ docker compose up --build
 - API: http://localhost:4107/health
 - Postgres: `localhost:5432`, χρήστης `vardia`, κωδικός `vardia`, βάση `vardia`
 
-Το API τρέχει τα migrations και φτιάχνει τον διαχειριστή μόλις ξεκινήσει. Τερματισμός με `Ctrl+C`. Με `-d` μένει στο παρασκήνιο.
-
-### Βάση σε Docker, εφαρμογές στον υπολογιστή
+### Εφαρμογές στον υπολογιστή
 
 ```bash
 docker compose up -d db
 pnpm install
 pnpm dev
+pnpm test
 ```
-
-Η `pnpm dev` αντιγράφει τα `.env` αν λείπουν, χτίζει το κοινό πακέτο, και σηκώνει το API στη θύρα **4107** και το web στη θύρα **4108**.
-
-```bash
-pnpm test          # κρατήσεις, χωρητικότητα, κλείδωμα γραμμής, 50 μ.
-pnpm db:migrate
-pnpm db:seed
-pnpm dev:mobile
-```
-
-Η `pnpm test` θέλει Postgres στο `postgresql://vardia:vardia@localhost:5432/vardia`. Το δίνει η `docker compose up -d db`.
 
 ### Expo Go
-
-Το τηλέφωνο πρέπει να βλέπει τον υπολογιστή. Το `localhost` στο τηλέφωνο είναι το ίδιο το τηλέφωνο.
 
 ```bash
 cd apps/mobile
 pnpm start
 ```
 
-Άνοιξε το project στο Expo Go από το QR. Στην οθόνη σύνδεσης βάλε τη διεύθυνση API με το LAN IP του υπολογιστή, π.χ. `http://192.168.1.20:4107`.
+Στο τηλέφωνο βάλε το LAN IP του υπολογιστή, π.χ. `http://192.168.1.20:4107`.
 
-- Προσομοιωτής iOS στον ίδιο Mac: `http://localhost:4107`.
-- Εξομοιωτής Android: `http://10.0.2.2:4107`.
+### Δοκιμή
 
-Η οθόνη του οδηγού πρέπει να μείνει ανοιχτή. Η θέση στέλνεται μόνο όσο η εφαρμογή είναι μπροστά.
+1. Μπες ως `admin` / `Dimarcheio!2026`.
+2. Φτιάξε οδηγό και απορριμματοφόρο (κάδος + κιλά).
+3. Φτιάξε βάρδια 6 ωρών με αυτό το όχημα και τον οδηγό.
+4. Σε άλλο παράθυρο κάνε εγγραφή επιχείρησης, σύρε την καρφίτσα, επιβεβαίωσε τη θέση.
+5. Ως admin ενέκρινε την αίτηση.
+6. Η επιχείρηση τσεκάρει κάδους, διαλέγει κιλά και ώρα για τον καθένα. Κάθε κάδος είναι ξεχωριστό ραντεβού. Ώρα χωρίς κιλά είναι γκρι.
+7. Ακύρωση μέχρι 15 λεπτά πριν.
+8. Ο οδηγός πατά **ΕΝΑΡΞΗ**. Η σειρά κλειδώνει από το τρέχον GPS και τελειώνει στην τελευταία στάση.
+9. Προσομοίωση 30 μ. (ή πραγματικό GPS). Η επιχείρηση βλέπει «Το απορριμματοφόρο έφτασε» μέχρι το **Ολοκληρώθηκε**.
+10. Μετά την τελευταία στάση η βάρδια κλείνει. Η παύση παγώνει την πρόοδο. Η θέση συνεχίζει όσο η οθόνη είναι ανοιχτή.
 
-### Διαδρομή δοκιμής
+Το γραφείο φιλτράρει, αλλάζει ώρα, ακυρώνει και στέλνει ερώτηση. Η απάντηση γυρίζει από τις ειδοποιήσεις.
 
-1. Άνοιξε το http://localhost:4108 και μπες ως διαχειριστής.
-2. Σε ιδιωτικό παράθυρο δήλωσε επιχείρηση. Σύρε την καρφίτσα στην έδρα. Η αίτηση μένει σε αναμονή.
-3. Ως διαχειριστής, στις **Εγκρίσεις**, ενέκρινε. Ο κωδικός πρόσκλησης φαίνεται στην αρχική της επιχείρησης.
-4. Φτιάξε λογαριασμό **οδηγού**.
-5. Ως επιχείρηση, άνοιξε βάρδια με χωρητικότητα `1`, το email του οδηγού, αφετηρία και έδρα, και πάτα **Άνοιγμα κρατήσεων**.
-6. Δήλωσε δύο **εργαζομένους** με τον κωδικό.
-7. Ο πρώτος κλείνει θέση. Ο δεύτερος παίρνει άρνηση: η βάρδια είναι γεμάτη. Ο έλεγχος γίνεται με κλείδωμα γραμμής στην Postgres.
-8. Ως οδηγός, άνοιξε **Οδήγηση**, τη βάρδια, και **Έναρξη διαδρομής**. Η γραμμή έρχεται από το OSRM (ευθεία αν το OSRM δεν απαντήσει).
-9. Πάτα **Προσομοίωση άφιξης 30 μ.** δίπλα στον επιβάτη. Ο εργαζόμενος βλέπει «Το βαν είναι κοντά», γιατί τα 30 μέτρα είναι μέσα στα 50. Το ίδιο κουμπί υπάρχει και στο τηλέφωνο.
-10. **Ολοκλήρωση**. Οι επιβεβαιωμένες θέσεις κλείνουν.
+### Εκτός έκδοσης
 
-Η γλώσσα αλλάζει με **ΕΛ / EN**.
-
-### Τι δεν υπάρχει ακόμα
-
-- Email και SMS. Ο κωδικός πρόσκλησης φαίνεται στην οθόνη. Οι ειδοποιήσεις είναι μέσα στην εφαρμογή και στο socket.
-- Επαναφορά κωδικού με email. Όποιος είναι συνδεδεμένος αλλάζει κωδικό από τον λογαριασμό.
-- Πληρωμές, τιμολόγια, αξιολογήσεις.
-- Επαναλαμβανόμενος κανόνας βάρδιας. Το αντίγραφο φτιάχνει ένα πρόχειρο.
-- Θέση στο παρασκήνιο αφού ο οδηγός φύγει από την οθόνη.
-- Δικός μας διακομιστής Nominatim/OSRM. Χρησιμοποιούνται οι δημόσιοι, με παύση ενός δευτερολέπτου στο Nominatim και ευθεία γραμμή αν πέσει το OSRM.
+- Πραγματικά Expo push tokens. Οι ειδοποιήσεις είναι μέσα στην εφαρμογή και στο socket.
+- SMS και email.
+- Δικός μας διακομιστής OSRM.
+- Αλλαγή σειράς μετά την έναρξη.
+- Φωτογραφίες ή αιτίες αποτυχίας.

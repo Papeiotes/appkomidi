@@ -9,9 +9,16 @@ datasource db {
 
 enum Role {
   ADMIN
-  BUSINESS_OWNER
+  OFFICE
   DRIVER
-  EMPLOYEE
+  BUSINESS
+}
+
+enum BinType {
+  GREEN
+  BLUE
+  YELLOW
+  BROWN
 }
 
 enum BusinessStatus {
@@ -20,172 +27,182 @@ enum BusinessStatus {
   REJECTED
 }
 
-enum ShiftDirection {
-  TO_WORK
-  FROM_WORK
-}
-
-enum ShiftStatus {
-  DRAFT
-  OPEN
-  LOCKED
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
+enum QuantityBracket {
+  KG_0_10
+  KG_10_20
+  KG_20_50
+  KG_50_PLUS
 }
 
 enum BookingStatus {
   CONFIRMED
   CANCELLED
   COMPLETED
-  NO_SHOW
+}
+
+enum ShiftStatus {
+  SCHEDULED
+  IN_PROGRESS
+  PAUSED
+  ENDED
+}
+
+model Municipality {
+  id         String     @id @default(cuid())
+  name       String
+  slug       String     @unique
+  users      User[]
+  businesses Business[]
+  trucks     Truck[]
+  shifts     Shift[]
+  bookings   Booking[]
+  subAreas   SubArea[]
+  createdAt  DateTime   @default(now())
 }
 
 model User {
-  id            String         @id @default(cuid())
-  email         String         @unique
-  passwordHash  String
-  name          String
-  phone         String?
-  role          Role
-  locale        String         @default("el")
-  businessId    String?
-  business      Business?      @relation("BusinessMembers", fields: [businessId], references: [id])
-  ownedBusiness Business?      @relation("BusinessOwner")
-  driverShifts  Shift[]        @relation("ShiftDriver")
-  bookings      Booking[]
-  notifications Notification[]
-  pings         LocationPing[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id             String       @id @default(cuid())
+  username       String       @unique
+  passwordHash   String
+  role           Role
+  name           String
+  phone          String?
+  locale         String       @default("el")
+  municipalityId String
+  municipality   Municipality @relation(fields: [municipalityId], references: [id])
+  permissions    String[]     @default([])
+  business       Business?
+  driverShifts   Shift[]      @relation("ShiftDriver")
+  createdAt      DateTime     @default(now())
 }
 
 model Business {
-  id            String         @id @default(cuid())
-  name          String
-  taxId         String?
-  address       String
-  lat           Float
-  lng           Float
-  status        BusinessStatus @default(PENDING)
-  inviteCode    String         @unique
-  rejectionNote String?
-  ownerId       String         @unique
-  owner         User           @relation("BusinessOwner", fields: [ownerId], references: [id])
-  members       User[]         @relation("BusinessMembers")
-  vehicles      Vehicle[]
-  shifts        Shift[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id             String         @id @default(cuid())
+  userId         String         @unique
+  user           User           @relation(fields: [userId], references: [id])
+  municipalityId String
+  municipality   Municipality   @relation(fields: [municipalityId], references: [id])
+  name           String
+  afm            String
+  phone          String
+  contactName    String
+  street         String
+  streetNumber   String
+  addressLabel   String
+  lat            Float
+  lng            Float
+  status         BusinessStatus @default(PENDING)
+  rejectionNote  String?
+  subAreaId      String?
+  subArea        SubArea?       @relation(fields: [subAreaId], references: [id])
+  bookings       Booking[]
+  createdAt      DateTime       @default(now())
+
+  @@index([municipalityId, status])
 }
 
-model Vehicle {
-  id         String   @id @default(cuid())
-  businessId String
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  plate      String
-  label      String?
-  seats      Int
-  shifts     Shift[]
-  createdAt  DateTime @default(now())
+model SubArea {
+  id             String       @id @default(cuid())
+  municipalityId String
+  municipality   Municipality @relation(fields: [municipalityId], references: [id])
+  name           String
+  ring           Json
+  businesses     Business[]
+}
+
+model Truck {
+  id             String       @id @default(cuid())
+  municipalityId String
+  municipality   Municipality @relation(fields: [municipalityId], references: [id])
+  binType        BinType
+  capacityKg     Int
+  active         Boolean      @default(true)
+  shifts         Shift[]
 }
 
 model Shift {
-  id           String         @id @default(cuid())
-  businessId   String
-  business     Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  driverId     String?
-  driver       User?          @relation("ShiftDriver", fields: [driverId], references: [id])
-  vehicleId    String?
-  vehicle      Vehicle?       @relation(fields: [vehicleId], references: [id])
-  title        String
-  direction    ShiftDirection
-  departsAt    DateTime
-  capacity     Int
-  lockMinutes  Int            @default(30)
-  status       ShiftStatus    @default(DRAFT)
-  notes        String?
-  musterLat    Float
-  musterLng    Float
-  musterLabel  String
-  destLat      Float
-  destLng      Float
-  destLabel    String
-  startedAt    DateTime?
-  completedAt  DateTime?
-  lastLat      Float?
-  lastLng      Float?
-  lastHeading  Float?
-  lastSpeed    Float?
-  lastPingAt   DateTime?
-  bookings     Booking[]
-  pings        LocationPing[]
-  arrivals     ArrivalEvent[]
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id             String       @id @default(cuid())
+  municipalityId String
+  municipality   Municipality @relation(fields: [municipalityId], references: [id])
+  truckId        String
+  truck          Truck        @relation(fields: [truckId], references: [id])
+  driverId       String
+  driver         User         @relation("ShiftDriver", fields: [driverId], references: [id])
+  startsAt       DateTime
+  endsAt         DateTime
+  status         ShiftStatus  @default(SCHEDULED)
+  routeLocked    Boolean      @default(false)
+  routeOrder     String[]     @default([])
+  cursor         Int          @default(0)
+  lastLat        Float?
+  lastLng        Float?
+  lastPingAt     DateTime?
+  startedAt      DateTime?
+  endedAt        DateTime?
+  bookings       Booking[]
+  closures       SlotClosure[]
+  pings          LocationPing[]
+  createdAt      DateTime     @default(now())
 
-  @@index([businessId, departsAt])
-  @@index([driverId, departsAt])
-  @@index([status])
+  @@index([municipalityId, startsAt])
+  @@index([driverId, startsAt])
+}
+
+model SlotClosure {
+  id       String   @id @default(cuid())
+  shiftId  String
+  shift    Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  slotAt   DateTime
+
+  @@unique([shiftId, slotAt])
 }
 
 model Booking {
-  id          String        @id @default(cuid())
-  shiftId     String
-  shift       Shift         @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User          @relation(fields: [userId], references: [id])
-  seats       Int           @default(1)
-  status      BookingStatus @default(CONFIRMED)
-  pickupLat   Float
-  pickupLng   Float
-  pickupLabel String
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id             String           @id @default(cuid())
+  municipalityId String
+  municipality   Municipality     @relation(fields: [municipalityId], references: [id])
+  businessId     String
+  business       Business         @relation(fields: [businessId], references: [id])
+  shiftId        String
+  shift          Shift            @relation(fields: [shiftId], references: [id])
+  binType        BinType
+  bracket        QuantityBracket
+  kg             Int
+  scheduledAt    DateTime
+  status         BookingStatus    @default(CONFIRMED)
+  arrivalOpen    Boolean          @default(false)
+  arrivalNotified Boolean         @default(false)
+  completedAt    DateTime?
+  createdAt      DateTime         @default(now())
 
   @@index([shiftId, status])
-  @@index([userId])
+  @@index([businessId, scheduledAt])
 }
 
 model LocationPing {
   id         String   @id @default(cuid())
   shiftId    String
   shift      Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  driverId   String
-  driver     User     @relation(fields: [driverId], references: [id])
   lat        Float
   lng        Float
-  heading    Float?
-  speed      Float?
   recordedAt DateTime @default(now())
 
   @@index([shiftId, recordedAt])
 }
 
-model ArrivalEvent {
-  id        String   @id @default(cuid())
-  shiftId   String
-  shift     Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  userId    String
-  bookingId String
-  distanceM Float
-  createdAt DateTime @default(now())
-
-  @@unique([shiftId, userId])
-}
-
 model Notification {
-  id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      String
-  titleEl   String
-  titleEn   String
-  bodyEl    String
-  bodyEn    String
-  data      Json?
-  readAt    DateTime?
-  createdAt DateTime  @default(now())
+  id         String    @id @default(cuid())
+  userId     String
+  type       String
+  titleEl    String
+  titleEn    String
+  bodyEl     String
+  bodyEn     String
+  data       Json?
+  reply      String?
+  repliedAt  DateTime?
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
 
   @@index([userId, createdAt])
 }

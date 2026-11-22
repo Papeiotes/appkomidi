@@ -1,102 +1,125 @@
 import {
   BookingError,
-  bookInTransaction,
-  cancelInTransaction,
-  isValidLatLng,
-  type BookingStatus,
+  assignUnderLock,
+  evaluateCancel,
+  kgForBracket,
+  type BinType,
+  type QuantityBracket,
 } from "@vardia/shared";
 import type { Prisma } from "@prisma/client";
+import { env } from "./env";
 import { prisma } from "./prisma";
 
 type Tx = Prisma.TransactionClient;
 
-async function lockShift(tx: Tx, shiftId: string) {
-  const rows = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Shift" WHERE id = ${shiftId} FOR UPDATE`;
-  if (rows.length === 0) throw new BookingError("SHIFT_NOT_FOUND");
+async function lockCompatible(tx: Tx, municipalityId: string, binType: BinType, scheduledAt: Date) {
+  const serviceEnd = new Date(scheduledAt.getTime() + 15 * 60_000);
+  await tx.$queryRaw`
+    SELECT s.id FROM "Shift" s
+    JOIN "Truck" t ON t.id = s."truckId"
+    WHERE s."municipalityId" = ${municipalityId}
+      AND t."binType"::text = ${binType}
+      AND s.status = 'SCHEDULED'
+      AND s."startsAt" <= ${scheduledAt}
+      AND s."endsAt" >= ${serviceEnd}
+    ORDER BY s.id
+    FOR UPDATE
+  `;
+}
+
+async function loadCompatible(tx: Tx, municipalityId: string, binType: BinType, scheduledAt: Date) {
+  const serviceEnd = new Date(scheduledAt.getTime() + 15 * 60_000);
+  const shifts = await tx.shift.findMany({
+    where: {
+      municipalityId,
+      status: "SCHEDULED",
+      startsAt: { lte: scheduledAt },
+      endsAt: { gte: serviceEnd },
+      truck: { binType },
+    },
+    include: { truck: true, closures: true, bookings: { where: { status: "CONFIRMED" } } },
+    orderBy: { id: "asc" },
+  });
+  return shifts.map((shift) => ({
+    id: shift.id,
+    status: shift.status,
+    startsAt: shift.startsAt.toISOString(),
+    endsAt: shift.endsAt.toISOString(),
+    capacityKg: shift.truck.capacityKg,
+    usedKg: shift.bookings.reduce((sum, booking) => sum + booking.kg, 0),
+    closedSlots: shift.closures.map((closure) => closure.slotAt.toISOString()),
+  }));
 }
 
 export async function createBooking(input: {
-  shiftId: string;
-  userId: string;
-  seats: number;
-  pickupLat: number;
-  pickupLng: number;
-  pickupLabel: string;
+  businessId: string;
+  binType: BinType;
+  bracket: QuantityBracket;
+  scheduledAt: Date;
   now?: Date;
 }) {
-  if (!isValidLatLng(input.pickupLat, input.pickupLng)) throw new BookingError("BAD_INPUT");
   const now = input.now ?? new Date();
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const result = await bookInTransaction({
-        lockShift: () => lockShift(tx, input.shiftId),
-        load: async () => {
-          const shift = await tx.shift.findUnique({ where: { id: input.shiftId } });
-          if (!shift) return null;
-          const confirmed = await tx.booking.findMany({
-            where: { shiftId: input.shiftId, status: "CONFIRMED" },
-            select: { userId: true, seats: true },
-          });
-          return {
-            id: shift.id,
-            status: shift.status,
-            capacity: shift.capacity,
-            confirmedSeats: confirmed.reduce((sum, row) => sum + row.seats, 0),
-            passengerIds: confirmed.map((row) => row.userId),
-            departsAt: shift.departsAt.toISOString(),
-            lockMinutes: shift.lockMinutes,
-          };
-        },
-        insert: (seats) =>
-          tx.booking.create({
-            data: {
-              shiftId: input.shiftId,
-              userId: input.userId,
-              seats,
-              pickupLat: input.pickupLat,
-              pickupLng: input.pickupLng,
-              pickupLabel: input.pickupLabel,
-            },
-          }),
-        requestedSeats: input.seats,
-        userId: input.userId,
-        now,
-      });
-      if (!result.ok) throw new BookingError(result.code);
-      return result;
+  const requestedKg = kgForBracket(input.bracket, env.overflowKg);
+  return prisma.$transaction(async (tx) => {
+    const business = await tx.business.findUnique({ where: { id: input.businessId } });
+    if (!business || business.status !== "APPROVED") throw new BookingError("NOT_APPROVED");
+    const result = await assignUnderLock({
+      lockShifts: () => lockCompatible(tx, business.municipalityId, input.binType, input.scheduledAt),
+      load: () => loadCompatible(tx, business.municipalityId, input.binType, input.scheduledAt),
+      insert: (shiftId) =>
+        tx.booking.create({
+          data: {
+            municipalityId: business.municipalityId,
+            businessId: business.id,
+            shiftId,
+            binType: input.binType,
+            bracket: input.bracket,
+            kg: requestedKg,
+            scheduledAt: input.scheduledAt,
+          },
+        }),
+      scheduledAt: input.scheduledAt,
+      now,
+      requestedKg,
     });
-  } catch (error) {
-    if (typeof error === "object" && error && "code" in error && (error as { code: string }).code === "P2002") {
-      throw new BookingError("ALREADY_BOOKED");
-    }
-    throw error;
-  }
+    if (!result.ok) throw new BookingError(result.code);
+    return result;
+  });
 }
 
-export async function cancelBooking(input: { bookingId: string; userId: string; now?: Date }) {
+export async function cancelBooking(input: { bookingId: string; businessId?: string; now?: Date; force?: boolean }) {
   const now = input.now ?? new Date();
   return prisma.$transaction(async (tx) => {
-    const existing = await tx.booking.findUnique({ where: { id: input.bookingId } });
-    if (!existing || existing.userId !== input.userId) throw new BookingError("BOOKING_NOT_FOUND");
-    const result = await cancelInTransaction({
-      lockShift: () => lockShift(tx, existing.shiftId),
-      load: async () => {
-        const shift = await tx.shift.findUnique({ where: { id: existing.shiftId } });
-        const booking = await tx.booking.findUnique({ where: { id: input.bookingId } });
-        if (!shift || !booking) return null;
-        return {
-          shiftStatus: shift.status,
-          departsAt: shift.departsAt.toISOString(),
-          lockMinutes: shift.lockMinutes,
-          bookingStatus: booking.status as BookingStatus,
-        };
-      },
-      cancel: () =>
+    const booking = await tx.booking.findUnique({ where: { id: input.bookingId } });
+    if (!booking) throw new BookingError("NOT_FOUND");
+    if (input.businessId && booking.businessId !== input.businessId) throw new BookingError("NOT_FOUND");
+    if (!input.force) {
+      const decision = evaluateCancel({ status: booking.status, scheduledAt: booking.scheduledAt, now });
+      if (!decision.ok) throw new BookingError(decision.code);
+    } else if (booking.status !== "CONFIRMED") {
+      throw new BookingError("NOT_CANCELLABLE");
+    }
+    return tx.booking.update({ where: { id: booking.id }, data: { status: "CANCELLED" } });
+  });
+}
+
+export async function moveBooking(input: { bookingId: string; scheduledAt: Date; now?: Date }) {
+  const now = input.now ?? new Date();
+  return prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findUnique({ where: { id: input.bookingId }, include: { business: true } });
+    if (!booking || booking.status !== "CONFIRMED") throw new BookingError("NOT_CANCELLABLE");
+    await tx.booking.update({ where: { id: booking.id }, data: { status: "CANCELLED" } });
+    const result = await assignUnderLock({
+      lockShifts: () => lockCompatible(tx, booking.municipalityId, booking.binType, input.scheduledAt),
+      load: () => loadCompatible(tx, booking.municipalityId, booking.binType, input.scheduledAt),
+      insert: (shiftId) =>
         tx.booking.update({
-          where: { id: input.bookingId },
-          data: { status: "CANCELLED" },
+          where: { id: booking.id },
+          data: { status: "CONFIRMED", shiftId, scheduledAt: input.scheduledAt },
         }),
+      scheduledAt: input.scheduledAt,
       now,
+      requestedKg: booking.kg,
     });
     if (!result.ok) throw new BookingError(result.code);
     return result.booking;

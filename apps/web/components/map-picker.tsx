@@ -90,7 +90,7 @@ export function MapPicker({
           ))}
         </ul>
       ) : query.trim().length >= 3 ? (
-        <p className="text-xs text-muted-foreground">{t(locale, "searchEmpty")}</p>
+        <p className="text-xs text-muted-foreground">{t(locale, "empty")}</p>
       ) : null}
       <div className="h-72 overflow-hidden rounded-xl border border-border">
         <MapContainer center={center} zoom={14} scrollWheelZoom className="h-full w-full">

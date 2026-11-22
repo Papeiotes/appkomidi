@@ -5,10 +5,10 @@ import { prisma } from "./prisma";
 import { accountRouter } from "./routes/account";
 import { adminRouter } from "./routes/admin";
 import { authRouter } from "./routes/auth";
-import { businessRouter } from "./routes/business";
+import { bookingsRouter } from "./routes/bookings";
 import { driverRouter } from "./routes/driver";
 import { geoRouter } from "./routes/geo";
-import { ridesRouter } from "./routes/rides";
+import { officeRouter } from "./routes/office";
 
 export function createApp() {
   const app = express();
@@ -18,14 +18,14 @@ export function createApp() {
     "/health",
     wrap(async (_req, res) => {
       await prisma.$queryRaw`SELECT 1`;
-      res.json({ ok: true, service: "vardia-api" });
+      res.json({ ok: true, service: "apokomidi-api" });
     }),
   );
   app.use(authRouter);
   app.use(accountRouter);
-  app.use(businessRouter);
-  app.use(ridesRouter);
+  app.use(bookingsRouter);
   app.use(driverRouter);
+  app.use(officeRouter);
   app.use(adminRouter);
   app.use(geoRouter);
   app.use(errorHandler);

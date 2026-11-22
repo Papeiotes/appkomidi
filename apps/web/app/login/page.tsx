@@ -15,56 +15,42 @@ export default function LoginPage() {
   const auth = useAuth();
   const router = useRouter();
   const locale = auth.locale;
-  const [email, setEmail] = useState("admin@vardia.gr");
+  const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
 
   return (
     <Shell>
       <form
-        className="mx-auto grid max-w-md gap-4 rounded-2xl border border-border bg-card p-6"
+        className="mx-auto grid max-w-md gap-4 rounded-2xl border border-border p-6"
         onSubmit={async (event) => {
           event.preventDefault();
-          setPending(true);
           setError(null);
           try {
             const body = await api<{ token: string; user: User }>("/auth/login", {
               method: "POST",
-              body: JSON.stringify({ email, password }),
+              body: JSON.stringify({ username, password }),
             });
             auth.login(body.token, body.user);
             router.push(homeFor(body.user.role));
           } catch (caught) {
             setError(caught instanceof ApiError ? caught.code : "REQUEST_FAILED");
-          } finally {
-            setPending(false);
           }
         }}
       >
-        <div>
-          <h1 className="font-serif text-4xl">{t(locale, "loginTitle")}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{t(locale, "loginBody")}</p>
-        </div>
+        <h1 className="text-3xl font-semibold">{t(locale, "loginTitle")}</h1>
         <ErrorNote code={error} locale={locale} />
-        <div className="grid gap-1.5">
-          <Label htmlFor="email">{t(locale, "email")}</Label>
-          <Input id="email" className="h-10" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="password">{t(locale, "password")}</Label>
-          <Input id="password" className="h-10" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-        </div>
-        <Button className="h-10" type="submit" disabled={pending}>
-          {pending ? t(locale, "loading") : t(locale, "signIn")}
+        <Label>{t(locale, "username")}</Label>
+        <Input className="h-10" value={username} onChange={(event) => setUsername(event.target.value)} required />
+        <Label>{t(locale, "password")}</Label>
+        <Input className="h-10" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+        <Button className="h-10" type="submit">
+          {t(locale, "signIn")}
         </Button>
-        <p className="rounded-lg bg-muted px-3 py-2 text-xs">{t(locale, "demoHint")}</p>
-        <p className="text-sm">
-          {t(locale, "noAccount")}{" "}
-          <Link className="underline" href="/register">
-            {t(locale, "registerTitle")}
-          </Link>
-        </p>
+        <p className="rounded-lg bg-secondary px-3 py-2 text-xs">{t(locale, "demoHint")}</p>
+        <Link className="text-sm text-primary" href="/register">
+          {t(locale, "ctaRegister")}
+        </Link>
       </form>
     </Shell>
   );

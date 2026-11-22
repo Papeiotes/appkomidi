@@ -1,37 +1,26 @@
+import { assignSubArea, isValidAfm, isValidLatLng, shiftEndsAt, OFFICE_PERMISSIONS } from "@vardia/shared";
 import { Router } from "express";
 import type { Server } from "socket.io";
 import { z } from "zod";
-import { requireAuth } from "../auth";
+import { hashPassword, requireAuth, type AuthedRequest } from "../auth";
 import { HttpError, wrap } from "../http";
 import { notify } from "../notify";
 import { prisma } from "../prisma";
-import { seatMap, shiftInclude, toShift } from "../shiftView";
 
 export const adminRouter = Router();
 
-adminRouter.get(
-  "/admin/stats",
-  requireAuth("ADMIN"),
-  wrap(async (_req, res) => {
-    const [pendingBusinesses, openShifts, liveShifts] = await Promise.all([
-      prisma.business.count({ where: { status: "PENDING" } }),
-      prisma.shift.count({ where: { status: "OPEN" } }),
-      prisma.shift.count({ where: { status: "IN_PROGRESS" } }),
-    ]);
-    res.json({ pendingBusinesses, openShifts, liveShifts });
-  }),
-);
+const username = z.string().trim().toLowerCase().min(3).max(32).regex(/^[a-z0-9._-]+$/);
 
 adminRouter.get(
   "/admin/businesses",
   requireAuth("ADMIN"),
   wrap(async (req, res) => {
-    const status = z.enum(["PENDING", "APPROVED", "REJECTED"]).optional().parse(req.query.status);
+    const auth = (req as AuthedRequest).auth;
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
     const businesses = await prisma.business.findMany({
-      where: status ? { status } : undefined,
-      include: { owner: { select: { id: true, name: true, email: true, phone: true } } },
+      where: { municipalityId: auth.municipalityId, status: status as "PENDING" | "APPROVED" | "REJECTED" | undefined },
+      include: { user: { select: { username: true } }, subArea: true },
       orderBy: { createdAt: "desc" },
-      take: 100,
     });
     res.json({ businesses });
   }),
@@ -41,20 +30,34 @@ adminRouter.post(
   "/admin/businesses/:id/approve",
   requireAuth("ADMIN"),
   wrap(async (req, res) => {
+    const body = z
+      .object({
+        lat: z.number().optional(),
+        lng: z.number().optional(),
+        subAreaId: z.string().nullable().optional(),
+      })
+      .parse(req.body ?? {});
     const business = await prisma.business.findUnique({ where: { id: String(req.params.id) } });
-    if (!business) throw new HttpError(404, "SHIFT_NOT_FOUND");
+    if (!business) throw new HttpError(404, "NOT_FOUND");
+    const lat = body.lat ?? business.lat;
+    const lng = body.lng ?? business.lng;
+    const areas = await prisma.subArea.findMany({ where: { municipalityId: business.municipalityId } });
+    const auto = assignSubArea(
+      { lat, lng },
+      areas.map((area) => ({ id: area.id, ring: area.ring as [number, number][] })),
+    );
     const updated = await prisma.business.update({
       where: { id: business.id },
-      data: { status: "APPROVED", rejectionNote: null },
+      data: { status: "APPROVED", lat, lng, rejectionNote: null, subAreaId: body.subAreaId === undefined ? auto : body.subAreaId },
     });
     const io = req.app.get("io") as Server | undefined;
     await notify(io, {
-      userId: business.ownerId,
-      type: "BUSINESS_APPROVED",
-      titleEl: "Η επιχείρηση εγκρίθηκε",
-      titleEn: "Business approved",
-      bodyEl: `Η «${business.name}» μπορεί να ανοίξει βάρδιες. Κωδικός εργαζομένων: ${business.inviteCode}.`,
-      bodyEn: `“${business.name}” can open shifts. Employee code: ${business.inviteCode}.`,
+      userId: business.userId,
+      type: "ACCOUNT_APPROVED",
+      titleEl: "Ο λογαριασμός εγκρίθηκε",
+      titleEn: "Account approved",
+      bodyEl: "Μπορείς να κλείσεις ραντεβού αποκομιδής.",
+      bodyEn: "You can book pickups now.",
       data: { businessId: business.id },
     });
     res.json({ business: updated });
@@ -65,38 +68,193 @@ adminRouter.post(
   "/admin/businesses/:id/reject",
   requireAuth("ADMIN"),
   wrap(async (req, res) => {
-    const body = z.object({ note: z.string().trim().max(300).optional() }).parse(req.body ?? {});
+    const body = z.object({ note: z.string().max(300).optional() }).parse(req.body ?? {});
     const business = await prisma.business.findUnique({ where: { id: String(req.params.id) } });
-    if (!business) throw new HttpError(404, "SHIFT_NOT_FOUND");
+    if (!business) throw new HttpError(404, "NOT_FOUND");
     const updated = await prisma.business.update({
       where: { id: business.id },
-      data: { status: "REJECTED", rejectionNote: body.note || null },
-    });
-    const io = req.app.get("io") as Server | undefined;
-    await notify(io, {
-      userId: business.ownerId,
-      type: "BUSINESS_REJECTED",
-      titleEl: "Η αίτηση απορρίφθηκε",
-      titleEn: "Application rejected",
-      bodyEl: body.note ? body.note : `Η «${business.name}» δεν εγκρίθηκε. Μπορείς να στείλεις ξανά την έδρα.`,
-      bodyEn: body.note ? body.note : `“${business.name}” was not approved. You can send the workplace again.`,
-      data: { businessId: business.id },
+      data: { status: "REJECTED", rejectionNote: body.note ?? null },
     });
     res.json({ business: updated });
   }),
 );
 
 adminRouter.get(
-  "/admin/live",
+  "/admin/users",
   requireAuth("ADMIN"),
-  wrap(async (_req, res) => {
-    const shifts = await prisma.shift.findMany({
-      where: { status: "IN_PROGRESS" },
-      include: shiftInclude,
-      orderBy: { startedAt: "desc" },
-      take: 30,
+  wrap(async (req, res) => {
+    const users = await prisma.user.findMany({
+      where: { municipalityId: (req as AuthedRequest).auth.municipalityId },
+      select: { id: true, username: true, name: true, role: true, phone: true, permissions: true },
+      orderBy: { username: "asc" },
     });
-    const seats = await seatMap(shifts.map((shift) => shift.id));
-    res.json({ shifts: shifts.map((shift) => toShift(shift, seats.get(shift.id) ?? 0)) });
+    res.json({ users });
   }),
 );
+
+adminRouter.post(
+  "/admin/users",
+  requireAuth("ADMIN"),
+  wrap(async (req, res) => {
+    const auth = (req as AuthedRequest).auth;
+    const body = z
+      .object({
+        username,
+        password: z.string().min(8).max(72),
+        name: z.string().trim().min(2).max(80),
+        phone: z.string().optional(),
+        role: z.enum(["ADMIN", "OFFICE", "DRIVER"]),
+        permissions: z.array(z.enum(OFFICE_PERMISSIONS)).optional(),
+      })
+      .parse(req.body);
+    const taken = await prisma.user.findUnique({ where: { username: body.username } });
+    if (taken) throw new HttpError(409, "USERNAME_TAKEN");
+    const user = await prisma.user.create({
+      data: {
+        username: body.username,
+        passwordHash: await hashPassword(body.password),
+        name: body.name,
+        phone: body.phone,
+        role: body.role,
+        municipalityId: auth.municipalityId,
+        permissions: body.role === "OFFICE" ? body.permissions ?? [...OFFICE_PERMISSIONS] : [],
+      },
+    });
+    res.status(201).json({ user: { id: user.id, username: user.username, role: user.role, permissions: user.permissions } });
+  }),
+);
+
+adminRouter.patch(
+  "/admin/users/:id/permissions",
+  requireAuth("ADMIN"),
+  wrap(async (req, res) => {
+    const body = z.object({ permissions: z.array(z.enum(OFFICE_PERMISSIONS)) }).parse(req.body);
+    const user = await prisma.user.update({ where: { id: String(req.params.id) }, data: { permissions: body.permissions } });
+    res.json({ user: { id: user.id, permissions: user.permissions } });
+  }),
+);
+
+adminRouter.post(
+  "/admin/trucks",
+  requireAuth("ADMIN"),
+  wrap(async (req, res) => {
+    const body = z
+      .object({ binType: z.enum(["GREEN", "BLUE", "YELLOW", "BROWN"]), capacityKg: z.number().int().min(10).max(20000) })
+      .parse(req.body);
+    const truck = await prisma.truck.create({
+      data: { municipalityId: (req as AuthedRequest).auth.municipalityId, binType: body.binType, capacityKg: body.capacityKg },
+    });
+    res.status(201).json({ truck });
+  }),
+);
+
+adminRouter.get(
+  "/admin/trucks",
+  requireAuth("ADMIN"),
+  wrap(async (req, res) => {
+    const trucks = await prisma.truck.findMany({ where: { municipalityId: (req as AuthedRequest).auth.municipalityId } });
+    res.json({ trucks });
+  }),
+);
+
+adminRouter.post(
+  "/admin/shifts",
+  requireAuth("ADMIN"),
+  wrap(async (req, res) => {
+    const body = z.object({ truckId: z.string(), driverId: z.string(), startsAt: z.string() }).parse(req.body);
+    const startsAt = new Date(body.startsAt);
+    const endsAt = shiftEndsAt(startsAt);
+    const truck = await prisma.truck.findUnique({ where: { id: body.truckId } });
+    const driver = await prisma.user.findUnique({ where: { id: body.driverId } });
+    if (!truck || !driver || driver.role !== "DRIVER") throw new HttpError(400, "BAD_INPUT");
+    const shift = await prisma.shift.create({
+      data: {
+        municipalityId: truck.municipalityId,
+        truckId: truck.id,
+        driverId: driver.id,
+        startsAt,
+        endsAt,
+      },
+    });
+    res.status(201).json({ shift });
+  }),
+);
+
+adminRouter.post(
+  "/admin/shifts/copy",
+  requireAuth("ADMIN"),
+  wrap(async (req, res) => {
+    const body = z.object({ shiftId: z.string(), dates: z.array(z.string()).min(1).max(14) }).parse(req.body);
+    const source = await prisma.shift.findUnique({ where: { id: body.shiftId } });
+    if (!source) throw new HttpError(404, "NOT_FOUND");
+    const created = [];
+    for (const date of body.dates) {
+      const startsAt = new Date(`${date}T${source.startsAt.toISOString().slice(11, 19)}.000Z`);
+      const endsAt = shiftEndsAt(startsAt);
+      created.push(
+        await prisma.shift.create({
+          data: { municipalityId: source.municipalityId, truckId: source.truckId, driverId: source.driverId, startsAt, endsAt },
+        }),
+      );
+    }
+    res.status(201).json({ shifts: created });
+  }),
+);
+
+adminRouter.get(
+  "/admin/shifts",
+  requireAuth("ADMIN"),
+  wrap(async (req, res) => {
+    const shifts = await prisma.shift.findMany({
+      where: { municipalityId: (req as AuthedRequest).auth.municipalityId },
+      include: { truck: true, driver: { select: { id: true, name: true, username: true } } },
+      orderBy: { startsAt: "asc" },
+      take: 100,
+    });
+    res.json({ shifts });
+  }),
+);
+
+adminRouter.post(
+  "/admin/areas",
+  requireAuth("ADMIN"),
+  wrap(async (req, res) => {
+    const body = z.object({ name: z.string().min(2), ring: z.array(z.tuple([z.number(), z.number()])).min(3) }).parse(req.body);
+    const area = await prisma.subArea.create({
+      data: { municipalityId: (req as AuthedRequest).auth.municipalityId, name: body.name, ring: body.ring },
+    });
+    res.status(201).json({ area });
+  }),
+);
+
+adminRouter.get(
+  "/admin/areas",
+  requireAuth("ADMIN"),
+  wrap(async (req, res) => {
+    const areas = await prisma.subArea.findMany({ where: { municipalityId: (req as AuthedRequest).auth.municipalityId } });
+    res.json({ areas });
+  }),
+);
+
+adminRouter.get(
+  "/admin/stats",
+  requireAuth("ADMIN"),
+  wrap(async (req, res) => {
+    const municipalityId = (req as AuthedRequest).auth.municipalityId;
+    const businessId = typeof req.query.businessId === "string" ? req.query.businessId : undefined;
+    const rows = await prisma.booking.groupBy({
+      by: ["businessId", "binType", "status"],
+      where: { municipalityId, businessId },
+      _sum: { kg: true },
+      _count: true,
+    });
+    const businesses = await prisma.business.findMany({
+      where: { municipalityId, id: businessId },
+      select: { id: true, name: true },
+    });
+    res.json({ rows, businesses });
+  }),
+);
+
+void isValidAfm;
+void isValidLatLng;

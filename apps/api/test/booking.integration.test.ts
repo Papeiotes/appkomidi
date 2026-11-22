@@ -1,156 +1,91 @@
-import { afterAll, beforeAll, expect, it } from "vitest";
-import { cancelBooking, createBooking } from "../src/bookingService";
+import { shiftEndsAt } from "@vardia/shared";
+import { afterAll, expect, it } from "vitest";
+import { createBooking } from "../src/bookingService";
 import { prisma } from "../src/prisma";
 
-const stamp = `lock-${Date.now()}`;
-const ids: { businessId?: string; userIds: string[]; shiftId?: string } = { userIds: [] };
-
-beforeAll(async () => {
-  await prisma.$queryRaw`SELECT 1`;
-});
+const stamp = `waste-${Date.now()}`;
+const ids: string[] = [];
 
 afterAll(async () => {
-  if (ids.businessId) {
-    await prisma.booking.deleteMany({ where: { shift: { businessId: ids.businessId } } });
-    await prisma.shift.deleteMany({ where: { businessId: ids.businessId } });
-    await prisma.user.updateMany({ where: { businessId: ids.businessId }, data: { businessId: null } });
-    await prisma.business.deleteMany({ where: { id: ids.businessId } });
-  }
-  if (ids.userIds.length) await prisma.user.deleteMany({ where: { id: { in: ids.userIds } } });
+  await prisma.booking.deleteMany({ where: { business: { name: { contains: stamp } } } });
+  await prisma.shift.deleteMany({ where: { driver: { username: { contains: stamp } } } });
+  await prisma.truck.deleteMany({ where: { municipality: { slug: stamp } } });
+  await prisma.business.deleteMany({ where: { name: { contains: stamp } } });
+  await prisma.user.deleteMany({ where: { username: { contains: stamp } } });
+  await prisma.municipality.deleteMany({ where: { slug: stamp } });
   await prisma.$disconnect();
 });
 
-it("holds capacity with a row lock when two riders book the last seat", async () => {
-  const passwordHash = "not-used";
-  const owner = await prisma.user.create({
-    data: { email: `${stamp}-owner@vardia.test`, passwordHash, name: "Owner", role: "BUSINESS_OWNER" },
-  });
-  ids.userIds.push(owner.id);
-  const business = await prisma.business.create({
+it("locks the truck so two 50+ pickups cannot both take the last kilograms", async () => {
+  const municipality = await prisma.municipality.create({ data: { name: stamp, slug: stamp } });
+  const driver = await prisma.user.create({
     data: {
-      name: `Test ${stamp}`,
-      address: "Αθήνα",
-      lat: 37.98,
-      lng: 23.72,
-      status: "APPROVED",
-      inviteCode: stamp.slice(-8).toUpperCase(),
-      ownerId: owner.id,
+      username: `${stamp}-driver`,
+      passwordHash: "x",
+      role: "DRIVER",
+      name: "Driver",
+      municipalityId: municipality.id,
     },
   });
-  ids.businessId = business.id;
-  await prisma.user.update({ where: { id: owner.id }, data: { businessId: business.id } });
-
-  const employees = await Promise.all(
-    [1, 2].map((n) =>
-      prisma.user.create({
-        data: {
-          email: `${stamp}-e${n}@vardia.test`,
-          passwordHash,
-          name: `Rider ${n}`,
-          role: "EMPLOYEE",
-          businessId: business.id,
-        },
-      }),
-    ),
-  );
-  ids.userIds.push(...employees.map((user) => user.id));
-
+  ids.push(driver.id);
+  const truck = await prisma.truck.create({
+    data: { municipalityId: municipality.id, binType: "GREEN", capacityKg: 100 },
+  });
+  const startsAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  startsAt.setUTCMinutes(0, 0, 0);
   const shift = await prisma.shift.create({
     data: {
-      businessId: business.id,
-      title: "Πρωινή",
-      direction: "TO_WORK",
-      departsAt: new Date(Date.now() + 3 * 60 * 60 * 1000),
-      capacity: 1,
-      lockMinutes: 15,
-      status: "OPEN",
-      musterLat: 37.98,
-      musterLng: 23.72,
-      musterLabel: "Στάση",
-      destLat: 37.99,
-      destLng: 23.73,
-      destLabel: "Έδρα",
+      municipalityId: municipality.id,
+      truckId: truck.id,
+      driverId: driver.id,
+      startsAt,
+      endsAt: shiftEndsAt(startsAt),
     },
   });
-  ids.shiftId = shift.id;
-
+  const businesses = await Promise.all(
+    [1, 2].map(async (n) => {
+      const user = await prisma.user.create({
+        data: {
+          username: `${stamp}-shop${n}`,
+          passwordHash: "x",
+          role: "BUSINESS",
+          name: `Shop ${n}`,
+          municipalityId: municipality.id,
+        },
+      });
+      return prisma.business.create({
+        data: {
+          userId: user.id,
+          municipalityId: municipality.id,
+          name: `${stamp} shop ${n}`,
+          afm: "090000045",
+          phone: "2100000000",
+          contactName: `Shop ${n}`,
+          street: "Σταδίου",
+          streetNumber: String(n),
+          addressLabel: "Σταδίου",
+          lat: 37.98,
+          lng: 23.73,
+          status: "APPROVED",
+        },
+      });
+    }),
+  );
+  const scheduledAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
   const attempts = await Promise.allSettled(
-    employees.map((user) =>
-      createBooking({
-        shiftId: shift.id,
-        userId: user.id,
-        seats: 1,
-        pickupLat: 37.975,
-        pickupLng: 23.73,
-        pickupLabel: user.name,
-      }),
+    businesses.map((business) =>
+      createBooking({ businessId: business.id, binType: "GREEN", bracket: "KG_50_PLUS", scheduledAt }),
     ),
   );
-
   const ok = attempts.filter((attempt) => attempt.status === "fulfilled");
   const full = attempts.filter(
-    (attempt) => attempt.status === "rejected" && (attempt.reason as { code?: string }).code === "SHIFT_FULL",
+    (attempt) => attempt.status === "rejected" && (attempt.reason as { code?: string }).code === "TRUCK_FULL",
   );
   expect(ok).toHaveLength(1);
   expect(full).toHaveLength(1);
-
-  const confirmed = await prisma.booking.aggregate({
+  const used = await prisma.booking.aggregate({
     where: { shiftId: shift.id, status: "CONFIRMED" },
-    _sum: { seats: true },
+    _sum: { kg: true },
   });
-  expect(confirmed._sum.seats).toBe(1);
-
-  const winner = ok[0].status === "fulfilled" ? ok[0].value.booking : null;
-  expect(winner).toBeTruthy();
-  await cancelBooking({ bookingId: winner!.id, userId: winner!.userId });
-  const loser = employees.find((user) => user.id !== winner!.userId)!;
-  const retried = await createBooking({
-    shiftId: shift.id,
-    userId: loser.id,
-    seats: 1,
-    pickupLat: 37.976,
-    pickupLng: 23.731,
-    pickupLabel: loser.name,
-  });
-  expect(retried.booking.userId).toBe(loser.id);
-
-  await expect(
-    createBooking({
-      shiftId: shift.id,
-      userId: loser.id,
-      seats: 1,
-      pickupLat: 37.976,
-      pickupLng: 23.731,
-      pickupLabel: loser.name,
-    }),
-  ).rejects.toMatchObject({ code: "ALREADY_BOOKED" });
-
-  const locked = await prisma.shift.create({
-    data: {
-      businessId: business.id,
-      title: "Κλειδωμένη",
-      direction: "TO_WORK",
-      departsAt: new Date(Date.now() + 10 * 60 * 1000),
-      capacity: 4,
-      lockMinutes: 30,
-      status: "OPEN",
-      musterLat: 37.98,
-      musterLng: 23.72,
-      musterLabel: "Στάση",
-      destLat: 37.99,
-      destLng: 23.73,
-      destLabel: "Έδρα",
-    },
-  });
-  await expect(
-    createBooking({
-      shiftId: locked.id,
-      userId: loser.id,
-      seats: 1,
-      pickupLat: 37.98,
-      pickupLng: 23.72,
-      pickupLabel: "Κοντά",
-    }),
-  ).rejects.toMatchObject({ code: "SHIFT_LOCKED" });
-  await prisma.shift.delete({ where: { id: locked.id } });
+  expect(used._sum.kg).toBe(75);
 });

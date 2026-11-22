@@ -55,22 +55,22 @@
 }
 
 :root {
-  --background: #f3efe6;
-  --foreground: #1c2416;
-  --card: #fffdf8;
-  --card-foreground: #1c2416;
-  --primary: #2f4a34;
-  --primary-foreground: #f7f4ec;
-  --secondary: #e6efe4;
-  --secondary-foreground: #1c2416;
-  --muted: #ece6da;
-  --muted-foreground: #5c6756;
-  --accent: #e39b2b;
-  --accent-foreground: #1c2416;
+  --background: #ffffff;
+  --foreground: #142018;
+  --card: #ffffff;
+  --card-foreground: #142018;
+  --primary: #1b7f4a;
+  --primary-foreground: #ffffff;
+  --secondary: #e7f6ee;
+  --secondary-foreground: #142018;
+  --muted: #f4f7f5;
+  --muted-foreground: #5c6b62;
+  --accent: #e7f6ee;
+  --accent-foreground: #142018;
   --destructive: #9d3b2c;
-  --border: #e0d7c8;
-  --input: #d9d0c1;
-  --ring: #2f4a34;
+  --border: #e3ebe6;
+  --input: #d5e0da;
+  --ring: #1b7f4a;
   --radius: 0.8rem;
 }
 

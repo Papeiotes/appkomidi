@@ -1,114 +1,99 @@
+import {
+  BIN_TYPES,
+  BRACKETS,
+  isValidAfm,
+  isValidLatLng,
+  OFFICE_PERMISSIONS,
+} from "@vardia/shared";
 import { Router } from "express";
 import { z } from "zod";
-import { checkPassword, hashPassword, publicUser, requireAuth, signToken, type AuthedRequest } from "../auth";
-import { makeInviteCode } from "../codes";
+import { businessIdOf, checkPassword, hashPassword, publicUser, requireAuth, signToken, type AuthedRequest } from "../auth";
 import { HttpError, wrap } from "../http";
 import { prisma } from "../prisma";
+import { assignSubArea } from "@vardia/shared";
 
 export const authRouter = Router();
 
-const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8).max(72),
-  name: z.string().trim().min(2).max(80),
-  phone: z.string().trim().max(30).optional().or(z.literal("")),
-  locale: z.enum(["el", "en"]).optional(),
-  role: z.enum(["BUSINESS_OWNER", "DRIVER", "EMPLOYEE"]),
-  inviteCode: z.string().trim().optional().or(z.literal("")),
-  business: z
-    .object({
-      name: z.string().trim().min(2).max(120),
-      taxId: z.string().trim().max(20).optional().or(z.literal("")),
-      address: z.string().trim().min(3).max(200),
-      lat: z.number().gte(-90).lte(90),
-      lng: z.number().gte(-180).lte(180),
-    })
-    .optional(),
-});
+const username = z.string().trim().toLowerCase().min(3).max(32).regex(/^[a-z0-9._-]+$/);
 
 authRouter.post(
   "/auth/register",
   wrap(async (req, res) => {
-    const body = registerSchema.parse(req.body);
-    const email = body.email.toLowerCase();
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) throw new HttpError(409, "EMAIL_TAKEN");
-    const passwordHash = await hashPassword(body.password);
-    const phone = body.phone ? body.phone : null;
-    const locale = body.locale ?? "el";
-
-    if (body.role === "BUSINESS_OWNER") {
-      if (!body.business) throw new HttpError(400, "BAD_INPUT");
-      const user = await prisma.$transaction(async (tx) => {
-        const created = await tx.user.create({
-          data: {
-            email,
-            passwordHash,
-            name: body.name,
-            phone,
-            locale,
-            role: "BUSINESS_OWNER",
-            ownedBusiness: {
-              create: {
-                name: body.business!.name,
-                taxId: body.business!.taxId || null,
-                address: body.business!.address,
-                lat: body.business!.lat,
-                lng: body.business!.lng,
-                inviteCode: makeInviteCode(),
-                status: "PENDING",
-              },
-            },
-          },
-          include: { ownedBusiness: true },
-        });
-        return tx.user.update({
-          where: { id: created.id },
-          data: { businessId: created.ownedBusiness!.id },
-        });
-      });
-      res.status(201).json({ token: signToken(user), user: publicUser(user) });
-      return;
-    }
-
-    if (body.role === "EMPLOYEE") {
-      const code = (body.inviteCode ?? "").toUpperCase();
-      const business = await prisma.business.findUnique({ where: { inviteCode: code } });
-      if (!business) throw new HttpError(400, "INVITE_INVALID");
-      if (business.status !== "APPROVED") throw new HttpError(400, "BUSINESS_PENDING");
-      const user = await prisma.user.create({
-        data: {
-          email,
-          passwordHash,
-          name: body.name,
-          phone,
-          locale,
-          role: "EMPLOYEE",
-          businessId: business.id,
-        },
-      });
-      res.status(201).json({ token: signToken(user), user: publicUser(user) });
-      return;
-    }
-
+    const body = z
+      .object({
+        username,
+        password: z.string().min(8).max(72),
+        businessName: z.string().trim().min(2).max(120),
+        afm: z.string().regex(/^\d{9}$/),
+        phone: z.string().trim().min(6).max(20),
+        contactName: z.string().trim().min(2).max(80),
+        street: z.string().trim().min(2).max(120),
+        streetNumber: z.string().trim().min(1).max(12),
+        addressLabel: z.string().trim().min(3).max(200),
+        lat: z.number(),
+        lng: z.number(),
+        locale: z.enum(["el", "en"]).optional(),
+      })
+      .parse(req.body);
+    if (!isValidAfm(body.afm)) throw new HttpError(400, "AFM_INVALID");
+    if (!isValidLatLng(body.lat, body.lng)) throw new HttpError(400, "BAD_INPUT");
+    const municipality = await prisma.municipality.findUnique({ where: { slug: "default" } });
+    if (!municipality) throw new HttpError(500, "REQUEST_FAILED");
+    const taken = await prisma.user.findUnique({ where: { username: body.username } });
+    if (taken) throw new HttpError(409, "USERNAME_TAKEN");
+    const areas = await prisma.subArea.findMany({ where: { municipalityId: municipality.id } });
+    const subAreaId = assignSubArea(
+      { lat: body.lat, lng: body.lng },
+      areas.map((area) => ({ id: area.id, ring: area.ring as [number, number][] })),
+    );
     const user = await prisma.user.create({
-      data: { email, passwordHash, name: body.name, phone, locale, role: "DRIVER" },
+      data: {
+        username: body.username,
+        passwordHash: await hashPassword(body.password),
+        role: "BUSINESS",
+        name: body.contactName,
+        phone: body.phone,
+        locale: body.locale ?? "el",
+        municipalityId: municipality.id,
+        business: {
+          create: {
+            municipalityId: municipality.id,
+            name: body.businessName,
+            afm: body.afm,
+            phone: body.phone,
+            contactName: body.contactName,
+            street: body.street,
+            streetNumber: body.streetNumber,
+            addressLabel: body.addressLabel,
+            lat: body.lat,
+            lng: body.lng,
+            status: "PENDING",
+            subAreaId,
+          },
+        },
+      },
+      include: { business: true },
     });
-    res.status(201).json({ token: signToken(user), user: publicUser(user) });
+    res.status(201).json({
+      token: signToken(user),
+      user: { ...publicUser({ ...user, permissions: user.permissions }), businessId: user.business?.id ?? null },
+    });
   }),
 );
 
 authRouter.post(
   "/auth/login",
   wrap(async (req, res) => {
-    const body = z
-      .object({ email: z.string().email(), password: z.string().min(1) })
-      .parse(req.body);
-    const user = await prisma.user.findUnique({ where: { email: body.email.toLowerCase() } });
-    if (!user || !(await checkPassword(body.password, user.passwordHash))) {
-      throw new HttpError(401, "INVALID_CREDENTIALS");
-    }
-    res.json({ token: signToken(user), user: publicUser(user) });
+    const body = z.object({ username: z.string().min(1), password: z.string().min(1) }).parse(req.body);
+    const user = await prisma.user.findUnique({
+      where: { username: body.username.trim().toLowerCase() },
+      include: { business: { select: { id: true } } },
+    });
+    if (!user || !(await checkPassword(body.password, user.passwordHash))) throw new HttpError(401, "INVALID_CREDENTIALS");
+    res.json({
+      token: signToken(user),
+      user: { ...publicUser({ ...user, permissions: user.permissions }), businessId: user.business?.id ?? null },
+    });
   }),
 );
 
@@ -117,8 +102,6 @@ authRouter.get(
   requireAuth(),
   wrap(async (req, res) => {
     const auth = (req as AuthedRequest).auth;
-    const user = await prisma.user.findUnique({ where: { id: auth.id } });
-    if (!user) throw new HttpError(401, "UNAUTHENTICATED");
-    res.json({ user: publicUser(user) });
+    res.json({ user: { ...publicUser(auth), businessId: businessIdOf(req) }, bins: BIN_TYPES, brackets: BRACKETS, permissions: OFFICE_PERMISSIONS });
   }),
 );

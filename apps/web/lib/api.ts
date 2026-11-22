@@ -8,50 +8,19 @@ export class ApiError extends Error {
   }
 }
 
-export type Role = "ADMIN" | "BUSINESS_OWNER" | "DRIVER" | "EMPLOYEE";
+export type Role = "ADMIN" | "OFFICE" | "DRIVER" | "BUSINESS";
+export type BinType = "GREEN" | "BLUE" | "YELLOW" | "BROWN";
 
 export type User = {
   id: string;
-  email: string;
+  username: string;
   name: string;
   phone: string | null;
   role: Role;
   locale: Locale;
+  municipalityId: string;
+  permissions: string[];
   businessId: string | null;
-};
-
-export type LatLngLabel = { lat: number; lng: number; label: string };
-
-export type Shift = {
-  id: string;
-  businessId: string;
-  businessName: string;
-  title: string;
-  direction: "TO_WORK" | "FROM_WORK";
-  departsAt: string;
-  capacity: number;
-  lockMinutes: number;
-  status: "DRAFT" | "OPEN" | "LOCKED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
-  notes: string | null;
-  muster: LatLngLabel;
-  destination: LatLngLabel;
-  driver: { id: string; name: string; email: string; phone: string | null } | null;
-  vehicle: { id: string; plate: string; label: string | null; seats: number } | null;
-  confirmedSeats: number;
-  remainingSeats: number;
-  bookable: boolean;
-  location: { lat: number; lng: number; heading: number | null; speed: number | null; recordedAt: string | null } | null;
-  myBooking?: { id: string; seats: number; pickup: LatLngLabel } | null;
-};
-
-export type BookingRow = {
-  id: string;
-  seats: number;
-  status: string;
-  pickup: LatLngLabel;
-  rider?: { id: string; name: string; phone?: string | null; email?: string };
-  createdAt?: string;
-  shift?: Shift;
 };
 
 export async function api<T>(path: string, init: RequestInit = {}, token?: string | null): Promise<T> {
@@ -71,7 +40,7 @@ export async function api<T>(path: string, init: RequestInit = {}, token?: strin
 
 export function homeFor(role: Role) {
   if (role === "ADMIN") return "/admin";
-  if (role === "BUSINESS_OWNER") return "/business";
+  if (role === "OFFICE") return "/office";
   if (role === "DRIVER") return "/drive";
-  return "/ride";
+  return "/business";
 }

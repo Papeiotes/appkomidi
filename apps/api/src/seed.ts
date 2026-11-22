@@ -3,18 +3,22 @@ import { env } from "./env";
 import { prisma } from "./prisma";
 
 export async function seed() {
-  const existing = await prisma.user.findUnique({ where: { email: env.adminEmail } });
+  const municipality =
+    (await prisma.municipality.findUnique({ where: { slug: "default" } })) ??
+    (await prisma.municipality.create({ data: { name: env.municipalityName, slug: "default" } }));
+  const existing = await prisma.user.findUnique({ where: { username: env.adminUsername } });
   if (existing) return existing;
   const user = await prisma.user.create({
     data: {
-      email: env.adminEmail,
+      username: env.adminUsername,
       passwordHash: await hashPassword(env.adminPassword),
       name: env.adminName,
       role: "ADMIN",
       locale: "el",
+      municipalityId: municipality.id,
     },
   });
-  console.log(`Seeded admin ${user.email}`);
+  console.log(`Seeded admin username=${user.username}`);
   return user;
 }
 

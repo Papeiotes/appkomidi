@@ -2,20 +2,22 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { translateError, type Locale } from "@vardia/shared";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
-const TOKEN = "vardia.token";
-const LOCALE = "vardia.locale";
-const API = "vardia.api";
+const TOKEN = "apokomidi.token";
+const LOCALE = "apokomidi.locale";
+const API = "apokomidi.api";
 
 export const DEFAULT_API = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4107";
 
-export type Role = "ADMIN" | "BUSINESS_OWNER" | "DRIVER" | "EMPLOYEE";
+export type Role = "ADMIN" | "OFFICE" | "DRIVER" | "BUSINESS";
 export type User = {
   id: string;
-  email: string;
+  username: string;
   name: string;
   phone: string | null;
   role: Role;
   locale: Locale;
+  municipalityId: string;
+  permissions: string[];
   businessId: string | null;
 };
 
@@ -50,12 +52,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       ]);
       if (storedLocale === "el" || storedLocale === "en") setLocaleState(storedLocale);
       if (storedApi) setApiUrlState(storedApi);
+      const base = (storedApi ?? DEFAULT_API).replace(/\/$/, "");
       if (storedToken) {
         setToken(storedToken);
         try {
-          const response = await fetch(`${storedApi ?? DEFAULT_API}/auth/me`, {
-            headers: { Authorization: `Bearer ${storedToken}` },
-          });
+          const response = await fetch(`${base}/auth/me`, { headers: { Authorization: `Bearer ${storedToken}` } });
           if (response.ok) {
             const body = (await response.json()) as { user: User };
             setUser(body.user);

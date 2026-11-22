@@ -1,205 +1,209 @@
 "use client";
 
-import { t } from "@vardia/shared";
-import Link from "next/link";
+import { formatWhen, t, type MessageKey } from "@vardia/shared";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import { Capacity, StatusBadge, When } from "@/components/bits";
-import { MapPicker } from "@/components/maps";
+import { io } from "socket.io-client";
+import { LiveMap } from "@/components/maps";
 import { ErrorNote, Shell } from "@/components/shell";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ApiError, api, type Shift } from "@/lib/api";
+import { API_URL, ApiError, api, type BinType } from "@/lib/api";
 import { useRequire } from "@/lib/auth";
 
-type Business = {
+type Slot = { at: string; remainingKg: number; bookable: boolean };
+type Business = { status: string; name: string; rejectionNote: string | null };
+type Mine = {
   id: string;
-  name: string;
-  taxId: string | null;
-  address: string;
-  lat: number;
-  lng: number;
-  status: "PENDING" | "APPROVED" | "REJECTED";
-  inviteCode: string;
-  rejectionNote: string | null;
+  status: string;
+  binType: BinType;
+  bracket: string;
+  kg: number;
+  scheduledAt: string;
+  arrivalOpen: boolean;
+  shift: { id: string; status: string; lastLat: number | null; lastLng: number | null };
 };
 
-type Vehicle = { id: string; plate: string; seats: number; label: string | null };
+const bins: BinType[] = ["GREEN", "BLUE", "YELLOW", "BROWN"];
+const brackets = ["KG_0_10", "KG_10_20", "KG_20_50", "KG_50_PLUS"] as const;
 
 export default function BusinessPage() {
-  const auth = useRequire("BUSINESS_OWNER");
+  const auth = useRequire("BUSINESS");
   const locale = auth.locale;
   const [business, setBusiness] = useState<Business | null>(null);
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [picked, setPicked] = useState<BinType[]>(["GREEN"]);
+  const [bracket, setBracket] = useState<(typeof brackets)[number]>("KG_0_10");
+  const [times, setTimes] = useState<Record<string, string>>({});
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const [suggested, setSuggested] = useState<string | null>(null);
+  const [mine, setMine] = useState<Mine[]>([]);
+  const [live, setLive] = useState<Mine | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [plate, setPlate] = useState("");
-  const [seats, setSeats] = useState(8);
-  const [label, setLabel] = useState("");
 
-  async function load() {
+  async function loadMine() {
     if (!auth.token) return;
-    const [biz, list, fleet] = await Promise.all([
-      api<{ business: Business }>("/business", {}, auth.token),
-      api<{ shifts: Shift[] }>("/business/shifts", {}, auth.token),
-      api<{ vehicles: Vehicle[] }>("/business/vehicles", {}, auth.token),
-    ]);
-    setBusiness(biz.business);
-    setShifts(list.shifts);
-    setVehicles(fleet.vehicles);
+    const body = await api<{ bookings: Mine[] }>("/bookings/mine", {}, auth.token);
+    setMine(body.bookings);
   }
 
   useEffect(() => {
     if (!auth.token) return;
-    load().catch((caught) => setError(caught instanceof ApiError ? caught.code : "REQUEST_FAILED"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    api<{ business: Business }>("/business", {}, auth.token)
+      .then((body) => setBusiness(body.business))
+      .catch((caught) => setError(caught instanceof ApiError ? caught.code : "REQUEST_FAILED"));
   }, [auth.token]);
 
-  if (!auth.user || !business) {
+  useEffect(() => {
+    if (!auth.token || business?.status !== "APPROVED") return;
+    api<{ slots: Slot[]; suggested: string | null }>(`/slots?binType=${picked[0] ?? "GREEN"}`, {}, auth.token).then((body) => {
+      setSlots(body.slots);
+      setSuggested(body.suggested);
+    });
+    void loadMine();
+  }, [auth.token, business?.status, picked]);
+
+  useEffect(() => {
+    if (!auth.token || !live) return;
+    const socket = io(API_URL, { auth: { token: auth.token } });
+    socket.emit("shift:join", live.shift.id);
+    socket.on("shift:location", (payload: { lat: number; lng: number }) => {
+      setLive((current) => (current ? { ...current, shift: { ...current.shift, lastLat: payload.lat, lastLng: payload.lng } } : current));
+    });
+    socket.on("shift:arrival", () => setLive((current) => (current ? { ...current, arrivalOpen: true } : current)));
+    return () => {
+      socket.disconnect();
+    };
+  }, [auth.token, live?.id]);
+
+  if (business && business.status !== "APPROVED") {
     return (
       <Shell>
-        <p>{error ? null : t(locale, "loading")}</p>
-        <ErrorNote code={error} locale={locale} />
+        <h1 className="text-3xl font-semibold">{t(locale, "pendingTitle")}</h1>
+        <p className="mt-2 text-muted-foreground">{business.rejectionNote || t(locale, "pendingBody")}</p>
       </Shell>
     );
   }
 
   return (
     <Shell>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-sm text-muted-foreground">{business.name}</p>
-          <h1 className="font-serif text-4xl">{t(locale, "overviewTitle")}</h1>
-        </div>
-        <StatusBadge kind="business" status={business.status} locale={locale} />
-      </div>
+      <h1 className="text-3xl font-semibold">{business?.name ?? t(locale, "navBook")}</h1>
+      <p className="mt-2 text-sm text-muted-foreground">{t(locale, "disclaimer")}</p>
       <ErrorNote code={error} locale={locale} />
-      {business.status !== "APPROVED" ? (
-        <section className="mt-4 grid gap-3 rounded-2xl border border-border bg-card p-4">
-          <h2 className="font-serif text-2xl">{business.status === "REJECTED" ? t(locale, "rejectedTitle") : t(locale, "pendingTitle")}</h2>
-          <p className="text-sm text-muted-foreground">{business.rejectionNote || t(locale, "pendingBody")}</p>
-          <MapPicker
-            locale={locale}
-            token={auth.token}
-            lat={business.lat}
-            lng={business.lng}
-            onChange={(next) =>
-              setBusiness({ ...business, lat: next.lat, lng: next.lng, address: next.label ?? business.address })
+      <div className="mt-4 flex flex-wrap gap-2">
+        {bins.map((item) => (
+          <button
+            key={item}
+            type="button"
+            className={`rounded-full border px-3 py-1 text-sm ${picked.includes(item) ? "border-primary bg-secondary" : "border-border"}`}
+            onClick={() =>
+              setPicked((current) => (current.includes(item) ? current.filter((bin) => bin !== item) : [...current, item]))
             }
-          />
-          <Button
-            onClick={async () => {
-              try {
-                const body = await api<{ business: Business }>(
-                  "/business",
-                  {
-                    method: "PATCH",
-                    body: JSON.stringify({
-                      address: business.address,
-                      lat: business.lat,
-                      lng: business.lng,
-                      resubmit: business.status === "REJECTED",
-                    }),
-                  },
-                  auth.token,
-                );
-                setBusiness(body.business);
-                toast.success(t(locale, "saved"));
-              } catch (caught) {
-                setError(caught instanceof ApiError ? caught.code : "REQUEST_FAILED");
-              }
-            }}
           >
-            {business.status === "REJECTED" ? t(locale, "resubmit") : t(locale, "save")}
-          </Button>
-        </section>
-      ) : (
-        <>
-          <section className="mt-4 rounded-2xl border border-border bg-card p-4">
-            <h2 className="font-medium">{t(locale, "inviteTitle")}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{t(locale, "inviteHelp")}</p>
-            <p className="mt-2 font-serif text-3xl tracking-widest">{business.inviteCode}</p>
-          </section>
-          <section className="mt-4 grid gap-4 md:grid-cols-[1fr_.8fr]">
-            <div>
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="font-serif text-2xl">{t(locale, "navShifts")}</h2>
-                <Button render={<Link href="/business/shifts/new" />}>{t(locale, "newShift")}</Button>
-              </div>
-              {shifts.length === 0 ? <p className="text-sm text-muted-foreground">{t(locale, "emptyShifts")}</p> : null}
-              <ul className="grid gap-3">
-                {shifts.map((shift) => (
-                  <li key={shift.id}>
-                    <Link href={`/business/shifts/${shift.id}`} className="block rounded-2xl border border-border bg-card p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-medium">{shift.title}</p>
-                          <p className="text-sm text-muted-foreground">
-                            <When iso={shift.departsAt} locale={locale} /> · {t(locale, shift.direction === "TO_WORK" ? "toWork" : "fromWork")}
-                          </p>
-                        </div>
-                        <StatusBadge kind="status" status={shift.status} locale={locale} />
-                      </div>
-                      <div className="mt-3">
-                        <Capacity shift={shift} locale={locale} />
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <form
-              className="h-fit rounded-2xl border border-border bg-card p-4"
-              onSubmit={async (event) => {
-                event.preventDefault();
-                try {
-                  await api("/business/vehicles", { method: "POST", body: JSON.stringify({ plate, seats, label }) }, auth.token);
-                  setPlate("");
-                  setLabel("");
-                  await load();
-                } catch (caught) {
-                  setError(caught instanceof ApiError ? caught.code : "REQUEST_FAILED");
-                }
-              }}
-            >
-              <h2 className="font-serif text-2xl">{t(locale, "addVehicle")}</h2>
-              <div className="mt-3 grid gap-2">
-                <Label>{t(locale, "plate")}</Label>
-                <Input className="h-10" value={plate} onChange={(event) => setPlate(event.target.value)} required />
-                <Label>{t(locale, "seats")}</Label>
-                <Input className="h-10" type="number" min={1} value={seats} onChange={(event) => setSeats(Number(event.target.value))} required />
-                <Label>{t(locale, "label")}</Label>
-                <Input className="h-10" value={label} onChange={(event) => setLabel(event.target.value)} />
-                <Button type="submit">{t(locale, "save")}</Button>
-              </div>
-              <ul className="mt-4 grid gap-2 text-sm">
-                {vehicles.map((vehicle) => (
-                  <li key={vehicle.id} className="flex items-center justify-between">
-                    <span>
-                      {vehicle.plate} · {vehicle.seats}
-                    </span>
-                    <button
-                      type="button"
-                      className="text-destructive"
-                      onClick={async () => {
-                        try {
-                          await api(`/business/vehicles/${vehicle.id}`, { method: "DELETE" }, auth.token);
-                          await load();
-                        } catch (caught) {
-                          setError(caught instanceof ApiError ? caught.code : "REQUEST_FAILED");
-                        }
-                      }}
-                    >
-                      {t(locale, "delete")}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </form>
-          </section>
-        </>
-      )}
+            {t(locale, `bin_${item}` as MessageKey)}
+          </button>
+        ))}
+      </div>
+      <label className="mt-3 grid max-w-xs gap-1 text-sm">
+        {t(locale, "statsKg")}
+        <select className="h-10 rounded-lg border border-input px-2" value={bracket} onChange={(event) => setBracket(event.target.value as typeof bracket)}>
+          {brackets.map((item) => (
+            <option key={item} value={item}>
+              {t(locale, `bracket_${item}` as MessageKey)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {suggested ? <p className="mt-3 text-sm">{t(locale, "suggested")}: {formatWhen(suggested, locale)}</p> : null}
+      {picked.map((item) => {
+        const needed = bracket === "KG_0_10" ? 10 : bracket === "KG_10_20" ? 20 : bracket === "KG_20_50" ? 50 : 75;
+        return (
+        <label key={item} className="mt-3 grid gap-1 text-sm">
+          {t(locale, `bin_${item}` as MessageKey)}
+          <select
+            className="h-10 rounded-lg border border-input px-2"
+            value={times[item] ?? ""}
+            onChange={(event) => setTimes({ ...times, [item]: event.target.value })}
+          >
+            <option value="">—</option>
+            {slots.map((slot) => {
+              const open = slot.bookable && slot.remainingKg >= needed;
+              return (
+              <option key={slot.at} value={slot.at} disabled={!open}>
+                {formatWhen(slot.at, locale)} · {slot.remainingKg} kg {open ? "" : t(locale, "fullSlot")}
+              </option>
+              );
+            })}
+          </select>
+        </label>
+        );
+      })}
+      <Button
+        className="mt-4"
+        onClick={async () => {
+          setError(null);
+          try {
+            const body = await api<{ results: { ok: boolean; code?: string }[] }>(
+              "/bookings",
+              {
+                method: "POST",
+                body: JSON.stringify({
+                  items: picked.filter((item) => times[item]).map((item) => ({ binType: item, bracket, scheduledAt: times[item] })),
+                }),
+              },
+              auth.token,
+            );
+            const failed = body.results.find((result) => !result.ok);
+            if (failed?.code) setError(failed.code);
+            await loadMine();
+          } catch (caught) {
+            setError(caught instanceof ApiError ? caught.code : "REQUEST_FAILED");
+          }
+        }}
+      >
+        {t(locale, "book")}
+      </Button>
+      <h2 className="mt-8 text-xl font-semibold">{t(locale, "navMine")}</h2>
+      <ul className="mt-2 grid gap-2">
+        {mine.map((booking) => (
+          <li key={booking.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border px-3 py-2 text-sm">
+            <span>
+              {t(locale, `bin_${booking.binType}` as MessageKey)} · {booking.kg} kg · {formatWhen(booking.scheduledAt, locale)} · {booking.status}
+            </span>
+            <span className="flex gap-2">
+              {booking.status === "CONFIRMED" ? (
+                <Button size="sm" variant="outline" onClick={() => setLive(booking)}>
+                  {t(locale, "live")}
+                </Button>
+              ) : null}
+              {booking.status === "CONFIRMED" ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    try {
+                      await api(`/bookings/${booking.id}/cancel`, { method: "POST" }, auth.token);
+                      await loadMine();
+                    } catch (caught) {
+                      setError(caught instanceof ApiError ? caught.code : "REQUEST_FAILED");
+                    }
+                  }}
+                >
+                  {t(locale, "cancelBooking")}
+                </Button>
+              ) : null}
+              {booking.status === "COMPLETED" ? (
+                <Button size="sm" variant="secondary" onClick={() => setTimes({ ...times, [booking.binType]: booking.scheduledAt })}>
+                  {t(locale, "bookAgain")}
+                </Button>
+              ) : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {live?.arrivalOpen ? <p className="mt-4 rounded-xl bg-secondary px-3 py-3 font-medium">{t(locale, "arrivedTitle")}</p> : null}
+      {live?.shift.lastLat != null && live.shift.lastLng != null ? (
+        <div className="mt-4">
+          <LiveMap driver={{ lat: live.shift.lastLat, lng: live.shift.lastLng }} line={[]} stops={[]} />
+        </div>
+      ) : null}
     </Shell>
   );
 }

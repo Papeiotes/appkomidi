@@ -112,3 +112,25 @@ export function lineString(points: LatLng[]): RouteLine {
 export function isValidLatLng(lat: number, lng: number): boolean {
   return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
 }
+
+/** Ray cast. Ring is [lng, lat] pairs, closed or open. */
+export function pointInPolygon(point: LatLng, ring: [number, number][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0];
+    const yi = ring[i][1];
+    const xj = ring[j][0];
+    const yj = ring[j][1];
+    const intersect =
+      yi > point.lat !== yj > point.lat && point.lng < ((xj - xi) * (point.lat - yi)) / (yj - yi + 0.0) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+export function assignSubArea<T extends { id: string; ring: [number, number][] }>(
+  point: LatLng,
+  areas: T[],
+): string | null {
+  return areas.find((area) => pointInPolygon(point, area.ring))?.id ?? null;
+}

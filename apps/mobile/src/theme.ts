@@ -1,14 +1,14 @@
 import { StyleSheet } from "react-native";
 
 export const colors = {
-  paper: "#f3efe6",
-  card: "#fffdf8",
-  ink: "#1c2416",
-  muted: "#5c6756",
-  line: "#e0d7c8",
-  olive: "#2f4a34",
-  cream: "#f7f4ec",
-  amber: "#e39b2b",
+  paper: "#ffffff",
+  card: "#ffffff",
+  ink: "#142018",
+  muted: "#5c6b62",
+  line: "#e3ebe6",
+  olive: "#1b7f4a",
+  cream: "#ffffff",
+  amber: "#1b7f4a",
   danger: "#9d3b2c",
 };
 

@@ -5,8 +5,10 @@ export const env = {
   port: Number(process.env.PORT ?? 4107),
   nominatimUrl: (process.env.NOMINATIM_URL ?? "https://nominatim.openstreetmap.org").replace(/\/$/, ""),
   osrmUrl: (process.env.OSRM_URL ?? "https://router.project-osrm.org").replace(/\/$/, ""),
-  adminEmail: (process.env.ADMIN_EMAIL ?? "admin@vardia.gr").toLowerCase(),
-  adminPassword: process.env.ADMIN_PASSWORD ?? "VardiaAdmin!2026",
-  adminName: process.env.ADMIN_NAME ?? "Διαχειριστής Βάρδιας",
+  adminUsername: (process.env.ADMIN_USERNAME ?? "admin").toLowerCase(),
+  adminPassword: process.env.ADMIN_PASSWORD ?? "Dimarcheio!2026",
+  adminName: process.env.ADMIN_NAME ?? "Διαχειριστής",
+  municipalityName: process.env.MUNICIPALITY_NAME ?? "Δήμος",
+  overflowKg: Number(process.env.OVERFLOW_KG ?? 75),
   nodeEnv: process.env.NODE_ENV ?? "development",
 };
