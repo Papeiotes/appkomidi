@@ -26,5 +26,19 @@ export async function notify(
     },
   });
   io?.to(`user:${input.userId}`).emit("notification", row);
+  const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { pushToken: true } });
+  if (user?.pushToken) {
+    await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        to: user.pushToken,
+        title: input.titleEl,
+        body: input.bodyEl,
+        sound: "default",
+        data: input.data ?? {},
+      }),
+    }).catch(() => undefined);
+  }
   return row;
 }

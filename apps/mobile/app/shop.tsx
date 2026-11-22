@@ -1,4 +1,4 @@
-import { formatWhen, t, type MessageKey } from "@vardia/shared";
+import { athensDateKey, formatWhen, t, type MessageKey } from "@vardia/shared";
 import { Stack, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
@@ -7,13 +7,14 @@ import { LogoutButton } from "../src/logout";
 import { useSession } from "../src/session";
 import { colors, styles } from "../src/theme";
 
-type Booking = { id: string; binType: string; kg: number; status: string; scheduledAt: string; arrivalOpen: boolean; shift: { id: string; status: string } };
+type Booking = { id: string; binType: string; kg: number; status: string; cancelReason: string | null; scheduledAt: string; arrivalOpen: boolean; shift: { id: string; status: string } };
 
 export default function ShopScreen() {
   const session = useSession();
   const router = useRouter();
   const locale = session.locale;
   const [pending, setPending] = useState(false);
+  const [tab, setTab] = useState<"upcoming" | "history">("upcoming");
   const [rows, setRows] = useState<Booking[]>([]);
 
   useEffect(() => {
@@ -22,12 +23,16 @@ export default function ShopScreen() {
       setPending(body.business.status !== "APPROVED");
       if (body.business.status === "APPROVED") {
         const list = await session.api<{ bookings: Booking[] }>("/bookings/mine");
-        setRows(list.bookings.filter((row) => row.status === "CONFIRMED"));
+        setRows(list.bookings);
       }
     });
   }, [session.token]);
 
-  const live = rows.find((row) => row.shift.status === "IN_PROGRESS" || row.arrivalOpen);
+  const today = athensDateKey(new Date());
+  const upcoming = rows.filter((row) => row.status === "CONFIRMED");
+  const history = rows.filter((row) => row.status !== "CONFIRMED");
+  const shown = tab === "history" ? history : upcoming;
+  const live = upcoming.find((row) => athensDateKey(new Date(row.scheduledAt)) === today && (row.shift.status === "IN_PROGRESS" || row.shift.status === "PAUSED"));
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -48,12 +53,19 @@ export default function ShopScreen() {
             <Text style={{ fontSize: 20, fontWeight: "700" }}>{live.arrivalOpen ? t(locale, "arrivedTitle") : t(locale, "eta")}</Text>
           </Pressable>
         ) : null}
-        <Text style={[styles.muted, { marginTop: 28 }]}>{t(locale, "upcoming")}</Text>
-        {rows.length === 0 ? <Text style={{ marginTop: 8 }}>{t(locale, "emptyNext")}</Text> : null}
-        {rows.map((row) => (
+        <View style={[styles.row, { marginTop: 28 }]}>
+          {(["upcoming", "history"] as const).map((item) => (
+            <Pressable key={item} onPress={() => setTab(item)} style={{ flex: 1, minHeight: 44, borderRadius: 999, alignItems: "center", justifyContent: "center", backgroundColor: tab === item ? colors.olive : "#fff", borderWidth: 1, borderColor: tab === item ? colors.olive : colors.line }}>
+              <Text style={{ color: tab === item ? "#fff" : colors.ink, fontWeight: "600" }}>{t(locale, item)}</Text>
+            </Pressable>
+          ))}
+        </View>
+        {shown.length === 0 ? <Text style={{ marginTop: 8 }}>{t(locale, "emptyNext")}</Text> : null}
+        {shown.map((row) => (
           <View key={row.id} style={[styles.card, { marginTop: 10 }]}>
             <Text style={{ fontSize: 18 }}>{t(locale, `bin_${row.binType}` as MessageKey)}</Text>
             <Text style={styles.muted}>{formatWhen(row.scheduledAt, locale)} · {row.kg} kg</Text>
+            {tab === "history" ? <Text>{row.cancelReason === "expired" ? t(locale, "expired") : t(locale, `status_${row.status}` as MessageKey)}</Text> : null}
           </View>
         ))}
       </ScrollView>

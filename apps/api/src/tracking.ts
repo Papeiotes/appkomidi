@@ -157,6 +157,18 @@ export async function completeCurrentStop(driverId: string, shiftId: string, io?
     where: { id: next.id },
     data: { status: "COMPLETED", completedAt: new Date(), arrivalOpen: false },
   });
+  const finished = shift.bookings.find((row) => row.id === next.id);
+  if (finished) {
+    await notify(io, {
+      userId: finished.business.userId,
+      type: "BOOKING_COMPLETED",
+      titleEl: "Η αποκομιδή ολοκληρώθηκε",
+      titleEn: "Pickup completed",
+      bodyEl: "Ο οδηγός παρέλαβε τους κάδους.",
+      bodyEn: "The driver collected the bins.",
+      data: { bookingId: finished.id },
+    });
+  }
   const remaining = shift.bookings.filter((booking) => booking.status === "CONFIRMED" && booking.id !== next.id);
   if (!remaining.length || shift.lastLat == null || shift.lastLng == null) {
     await prisma.shift.update({

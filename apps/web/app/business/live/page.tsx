@@ -16,11 +16,13 @@ function LiveInner() {
   const [point, setPoint] = useState<{ lat: number; lng: number } | null>(null);
   const [open, setOpen] = useState(false);
   const [eta, setEta] = useState<string | null>(null);
+  const [inactive, setInactive] = useState(false);
 
   useEffect(() => {
     if (!auth.token || !id) return;
     let socket: ReturnType<typeof io> | null = null;
     api<{ booking: { arrivalOpen: boolean }; shift: { id: string; lastLat: number | null; lastLng: number | null }; eta: string | null }>(`/bookings/${id}/live`, {}, auth.token).then((body) => {
+      setInactive(false);
       setOpen(body.booking.arrivalOpen);
       setEta(body.eta);
       if (body.shift.lastLat != null && body.shift.lastLng != null) setPoint({ lat: body.shift.lastLat, lng: body.shift.lastLng });
@@ -28,7 +30,7 @@ function LiveInner() {
       socket.emit("shift:join", body.shift.id);
       socket.on("shift:location", (payload: { lat: number; lng: number }) => setPoint(payload));
       socket.on("shift:arrival", () => setOpen(true));
-    });
+    }).catch(() => setInactive(true));
     return () => {
       socket?.disconnect();
     };
@@ -36,11 +38,14 @@ function LiveInner() {
 
   return (
     <Shell>
-      <h1 className="text-3xl font-semibold">{open ? t(locale, "arrivedTitle") : t(locale, "onTheWay")}</h1>
-      {eta ? <p className="mt-2 text-muted-foreground">{t(locale, "eta")}: {formatWhen(eta, locale)}</p> : null}
+      <h1 className="text-3xl font-semibold">{inactive ? t(locale, "live") : open ? t(locale, "arrivedTitle") : t(locale, "onTheWay")}</h1>
+      {inactive ? <p className="mt-3 text-muted-foreground">{t(locale, "liveOnly")}</p> : null}
+      {eta && !inactive ? <p className="mt-2 text-muted-foreground">{t(locale, "eta")}: {formatWhen(eta, locale)}</p> : null}
+      {inactive ? null : (
       <div className="mt-4">
         <LiveMap driver={point} line={[]} stops={[]} className="h-[28rem] overflow-hidden rounded-3xl" />
       </div>
+      )}
     </Shell>
   );
 }

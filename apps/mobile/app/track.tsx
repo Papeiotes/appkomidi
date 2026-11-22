@@ -16,6 +16,7 @@ export default function TrackScreen() {
   const { bookingId } = useLocalSearchParams<{ bookingId: string }>();
   const locale = session.locale;
   const [arrival, setArrival] = useState(false);
+  const [inactive, setInactive] = useState(false);
   const mapHtml = useRef(liveHtml(37.9838, 23.7275)).current;
   const mapRef = useRef<WebView>(null);
 
@@ -26,6 +27,7 @@ export default function TrackScreen() {
         `/bookings/${bookingId}/live`,
       )
       .then((body) => {
+        setInactive(false);
         setArrival(body.booking.arrivalOpen);
         const move = (lat: number, lng: number) => mapRef.current?.injectJavaScript(`window.setVan && window.setVan(${lat}, ${lng}); true;`);
         if (body.shift.lastLat != null && body.shift.lastLng != null) move(body.shift.lastLat, body.shift.lastLng);
@@ -33,7 +35,8 @@ export default function TrackScreen() {
         socket.emit("shift:join", body.shift.id);
         socket.on("shift:location", (payload: { lat: number; lng: number }) => move(payload.lat, payload.lng));
         socket.on("shift:arrival", () => setArrival(true));
-      });
+      })
+      .catch(() => setInactive(true));
   }, [session.token, bookingId]);
 
   return (
@@ -41,10 +44,13 @@ export default function TrackScreen() {
       <Stack.Screen options={{ title: t(locale, "live"), headerRight: () => <LogoutButton /> }} />
       <View style={styles.pad}>
         <Text style={styles.title}>{t(locale, "live")}</Text>
-        {arrival ? <Text style={styles.card}>{t(locale, "arrivedTitle")}. {t(locale, "arrivedBody")}</Text> : null}
+        {inactive ? <Text style={styles.muted}>{t(locale, "liveOnly")}</Text> : null}
+        {arrival && !inactive ? <Text style={styles.card}>{t(locale, "arrivedTitle")}. {t(locale, "arrivedBody")}</Text> : null}
+        {inactive ? null : (
         <View style={{ height: 360, borderRadius: 16, overflow: "hidden" }}>
           <Leaflet ref={mapRef} html={mapHtml} />
         </View>
+        )}
       </View>
     </SafeAreaView>
   );

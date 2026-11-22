@@ -16,6 +16,7 @@ accountRouter.patch(
         name: z.string().trim().min(2).max(80).optional(),
         phone: z.string().trim().max(30).optional().or(z.literal("")),
         locale: z.enum(["el", "en"]).optional(),
+        pushToken: z.string().min(10).max(200).optional(),
       })
       .parse(req.body);
     const user = await prisma.user.update({
@@ -24,6 +25,7 @@ accountRouter.patch(
         name: body.name,
         phone: body.phone === "" ? null : body.phone,
         locale: body.locale,
+        pushToken: body.pushToken,
       },
     });
     res.json({

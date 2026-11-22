@@ -8,6 +8,36 @@ const API = "apokomidi.api";
 
 export const DEFAULT_API = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4107";
 
+async function registerPush(base: string, token: string) {
+  try {
+    const Notifications = await import("expo-notifications");
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+    const existing = await Notifications.getPermissionsAsync();
+    const granted = existing.granted || (await Notifications.requestPermissionsAsync()).granted;
+    if (!granted) return;
+    const Constants = await import("expo-constants");
+    const projectId = Constants.default.expoConfig?.extra?.eas?.projectId ?? Constants.default.easConfig?.projectId;
+    const expoToken = projectId
+      ? await Notifications.getExpoPushTokenAsync({ projectId })
+      : await Notifications.getExpoPushTokenAsync();
+    await fetch(`${base}/account`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ pushToken: expoToken.data }),
+    });
+  } catch {
+    // Simulators have no push token. The in-app notification still arrives.
+  }
+}
+
 export type Role = "ADMIN" | "OFFICE" | "DRIVER" | "BUSINESS";
 export type User = {
   id: string;
@@ -61,6 +91,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             const body = (await response.json()) as { user: User };
             setUser(body.user);
             setLocaleState(body.user.locale);
+            if (body.user.role === "BUSINESS") void registerPush(base, storedToken);
           } else {
             await AsyncStorage.removeItem(TOKEN);
             setToken(null);
@@ -102,6 +133,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setToken(nextToken);
         setUser(nextUser);
         setLocaleState(nextUser.locale);
+        if (nextUser.role === "BUSINESS") void registerPush(base, nextToken);
       },
       logout: async () => {
         await AsyncStorage.removeItem(TOKEN);

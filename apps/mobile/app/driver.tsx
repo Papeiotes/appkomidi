@@ -56,7 +56,8 @@ export default function DriverScreen() {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
         moveVan(lat, lng);
-        socket.emit("shift:location", { shiftId, lat, lng });
+        if (socket.connected) socket.emit("shift:location", { shiftId, lat, lng });
+        else void session.api(`/driver/shifts/${shiftId}/location`, { method: "POST", body: JSON.stringify({ lat, lng }) });
       });
     });
     return () => {

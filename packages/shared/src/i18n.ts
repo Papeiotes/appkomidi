@@ -67,6 +67,7 @@ const messages = {
   logout: { el: "Αποσύνδεση", en: "Sign out" },
   history: { el: "Ιστορικό", en: "History" },
   expired: { el: "Έληξε", en: "Expired" },
+  liveOnly: { el: "Ο χάρτης φαίνεται μόνο όσο το σημερινό ραντεβού είναι σε εξέλιξη.", en: "The map is shown only while today's pickup is on the way." },
   typeKg: { el: "Πόσα κιλά; Γράψε τον αριθμό.", en: "How many kilos? Type the number." },
   lastKg: { el: "Προηγούμενη ποσότητα", en: "Last amount" },
   language: { el: "Γλώσσα", en: "Language" },

@@ -55,6 +55,8 @@ railway variable set CORS_ORIGINS=https://appkomidi-web-production.up.railway.ap
 
 Το `PORT` το δίνει το Railway. Μην το ορίσεις εσύ.
 
+Δεν χρειάζεται νέο μυστικό για τις ειδοποιήσεις. Το app αποθηκεύει το Expo push token στον λογαριασμό κατά τη σύνδεση, και το API το στέλνει στο δημόσιο `https://exp.host/--/api/v2/push/send` χωρίς server key.
+
 Web (`appkomidi-web`). Το Next ενσωματώνει τη διεύθυνση στο build, γι' αυτό μπαίνει πριν το `railway up`:
 
 ```bash

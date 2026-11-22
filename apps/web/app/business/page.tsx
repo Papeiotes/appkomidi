@@ -1,6 +1,6 @@
 "use client";
 
-import { formatWhen, t, type MessageKey } from "@vardia/shared";
+import { athensDateKey, formatWhen, t, type MessageKey } from "@vardia/shared";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { binColor } from "@/components/wizard";
@@ -12,16 +12,23 @@ type Booking = {
   id: string;
   status: string;
   binType: string;
-  bracket: string;
+  kg: number;
+  cancelReason: string | null;
   scheduledAt: string;
   arrivalOpen: boolean;
   shift: { id: string; status: string };
 };
 
+function statusLabel(locale: "el" | "en", row: Booking) {
+  if (row.cancelReason === "expired") return t(locale, "expired");
+  return t(locale, `status_${row.status}` as MessageKey);
+}
+
 export default function BusinessHome() {
   const auth = useRequire("BUSINESS");
   const locale = auth.locale;
   const [pending, setPending] = useState(false);
+  const [tab, setTab] = useState<"upcoming" | "history">("upcoming");
   const [rows, setRows] = useState<Booking[]>([]);
 
   useEffect(() => {
@@ -34,8 +41,11 @@ export default function BusinessHome() {
     });
   }, [auth.token]);
 
+  const today = athensDateKey(new Date());
   const upcoming = rows.filter((row) => row.status === "CONFIRMED");
-  const live = upcoming.find((row) => row.shift.status === "IN_PROGRESS" || row.arrivalOpen);
+  const history = rows.filter((row) => row.status !== "CONFIRMED");
+  const shown = tab === "history" ? history : upcoming;
+  const live = upcoming.find((row) => athensDateKey(new Date(row.scheduledAt)) === today && (row.shift.status === "IN_PROGRESS" || row.shift.status === "PAUSED"));
 
   return (
     <Shell>
@@ -56,16 +66,23 @@ export default function BusinessHome() {
             <p className="mt-1 text-xl font-semibold">{live.arrivalOpen ? t(locale, "arrivedTitle") : t(locale, "eta")}</p>
           </Link>
         ) : null}
-        <h2 className="mt-8 text-sm font-medium tracking-wide text-muted-foreground uppercase">{t(locale, "upcoming")}</h2>
-        {upcoming.length === 0 ? <p className="mt-3 text-muted-foreground">{t(locale, "emptyNext")}</p> : null}
+        <div className="mt-8 flex gap-2">
+          {(["upcoming", "history"] as const).map((item) => (
+            <button key={item} type="button" className={`inline-flex h-11 items-center rounded-full px-4 text-sm ${tab === item ? "bg-primary text-white" : "border border-border"}`} onClick={() => setTab(item)}>
+              {t(locale, item)}
+            </button>
+          ))}
+        </div>
+        {shown.length === 0 ? <p className="mt-3 text-muted-foreground">{t(locale, "emptyNext")}</p> : null}
         <ul className="mt-3 grid gap-3">
-          {upcoming.map((row) => (
+          {shown.map((row) => (
             <li key={row.id} className="rounded-3xl border border-border p-5">
               <div className="flex items-center gap-3">
                 <span className="h-4 w-4 rounded-full" style={{ background: binColor[row.binType] }} />
                 <p className="text-lg font-medium">{t(locale, `bin_${row.binType}` as MessageKey)}</p>
               </div>
-              <p className="mt-2 text-muted-foreground">{formatWhen(row.scheduledAt, locale)} · {t(locale, `bracket_${row.bracket}` as MessageKey)}</p>
+              <p className="mt-2 text-muted-foreground">{formatWhen(row.scheduledAt, locale)} · {row.kg} kg</p>
+              {tab === "history" ? <p className="mt-1 text-sm">{statusLabel(locale, row)}</p> : null}
             </li>
           ))}
         </ul>

@@ -36,6 +36,12 @@
         {
           "locationWhenInUsePermission": "Το APPkomidi στέλνει τη θέση του οδηγού για την ειδοποίηση άφιξης στα 50 μέτρα."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#1b7f4a"
+        }
       ]
     ],
     "extra": {
