@@ -13,7 +13,7 @@ type Booking = {
   id: string;
   status: string;
   binType: string;
-  kg: number;
+  bracket: string;
   scheduledAt: string;
   arrivalOpen: boolean;
   shift: { id: string; status: string };
@@ -66,7 +66,7 @@ export default function BusinessHome() {
                 <span className="h-4 w-4 rounded-full" style={{ background: binColor[row.binType] }} />
                 <p className="text-lg font-medium">{t(locale, `bin_${row.binType}` as MessageKey)}</p>
               </div>
-              <p className="mt-2 text-muted-foreground">{formatWhen(row.scheduledAt, locale)} · {row.kg} kg</p>
+              <p className="mt-2 text-muted-foreground">{formatWhen(row.scheduledAt, locale)} · {t(locale, `bracket_${row.bracket}` as MessageKey)}</p>
             </li>
           ))}
         </ul>

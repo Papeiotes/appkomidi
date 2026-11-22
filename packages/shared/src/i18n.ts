@@ -3,6 +3,11 @@ export type Locale = "el" | "en";
 const messages = {
   brand: { el: "Αποκομιδή", en: "Collection" },
   tagline: { el: "Ραντεβού αποκομιδής για επιχειρήσεις του Δήμου.", en: "Pickup appointments for shops in the municipality." },
+  cityBrand: { el: "Δήμος Αθηναίων", en: "Municipality of Athens" },
+  loginSubtitle: {
+    el: "Ραντεβού αποκομιδής εμπορικών απορριμμάτων",
+    en: "Commercial waste pickup appointments",
+  },
   heroTitle: { el: "Κλείσε κάδο. Το απορριμματοφόρο έρχεται στο pin σου.", en: "Book a bin. The truck comes to your pin." },
   heroBody: {
     el: "Πράσινος, μπλε, κίτρινος ή καφέ κάδος. Η ποσότητα είναι σε κιλά και χωράει μόνο αν το απορριμματοφόρο της βάρδιας έχει χώρο.",
@@ -120,7 +125,10 @@ const messages = {
   pause: { el: "ΠΑΥΣΗ", en: "PAUSE" },
   resume: { el: "ΣΥΝΕΧΕΙΑ", en: "RESUME" },
   endShift: { el: "ΤΕΛΟΣ ΒΑΡΔΙΑΣ", en: "END SHIFT" },
-  completeStop: { el: "Ολοκληρώθηκε", en: "Completed" },
+  completeStop: { el: "ΟΛΟΚΛΗΡΩΣΗ", en: "COMPLETE" },
+  shiftDone: { el: "Η βάρδια ολοκληρώθηκε", en: "The shift is complete" },
+  stopsDone: { el: "Ολοκληρωμένες στάσεις", en: "Completed stops" },
+  unavailable: { el: "Μη διαθέσιμη", en: "Unavailable" },
   nextStop: { el: "Επόμενη στάση", en: "Next stop" },
   eta: { el: "Εκτιμώμενη άφιξη", en: "Estimated arrival" },
   arrivedTitle: { el: "Το απορριμματοφόρο έφτασε", en: "The truck has arrived" },
@@ -190,6 +198,7 @@ export function t(locale: Locale, key: MessageKey, vars?: Record<string, string 
 export function formatWhen(iso: string | Date, locale: Locale): string {
   const date = typeof iso === "string" ? new Date(iso) : iso;
   return new Intl.DateTimeFormat(locale === "el" ? "el-GR" : "en-GB", {
+    timeZone: "Europe/Athens",
     weekday: "short",
     day: "numeric",
     month: "short",

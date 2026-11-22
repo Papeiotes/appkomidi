@@ -1,6 +1,6 @@
 "use client";
 
-import { t } from "@vardia/shared";
+import { formatWhen, t } from "@vardia/shared";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { io } from "socket.io-client";
@@ -37,7 +37,7 @@ function LiveInner() {
   return (
     <Shell>
       <h1 className="text-3xl font-semibold">{open ? t(locale, "arrivedTitle") : t(locale, "onTheWay")}</h1>
-      {eta ? <p className="mt-2 text-muted-foreground">{t(locale, "eta")}: {new Date(eta).toLocaleTimeString()}</p> : null}
+      {eta ? <p className="mt-2 text-muted-foreground">{t(locale, "eta")}: {formatWhen(eta, locale)}</p> : null}
       <div className="mt-4">
         <LiveMap driver={point} line={[]} stops={[]} className="h-[28rem] overflow-hidden rounded-3xl" />
       </div>

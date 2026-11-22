@@ -68,12 +68,15 @@ export function etaForStop(input: {
   travelSeconds?: (from: LatLng, to: LatLng) => number;
 }): Date | null {
   const travel = input.travelSeconds ?? travelSecondsHaversine;
+  const flexMs = FLEX_MINUTES * 60_000;
   let cursor = input.start;
   let clock = input.now.getTime();
   for (const stop of input.ordered) {
-    clock += travel(cursor, stop.at) * 1000;
-    if (stop.id === input.targetId) return new Date(clock);
-    clock += SERVICE_MINUTES * 60_000;
+    let arrival = clock + travel(cursor, stop.at) * 1000;
+    const scheduled = new Date(stop.scheduledAt).getTime();
+    if (arrival < scheduled - flexMs) arrival = scheduled - flexMs;
+    if (stop.id === input.targetId) return new Date(arrival);
+    clock = arrival + SERVICE_MINUTES * 60_000;
     cursor = stop.at;
   }
   return null;

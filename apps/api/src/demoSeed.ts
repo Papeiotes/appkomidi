@@ -1,4 +1,4 @@
-import { OFFICE_PERMISSIONS } from "@vardia/shared";
+import { athensInstant, athensParts, OFFICE_PERMISSIONS, shiftEndsAt } from "@vardia/shared";
 import type { BinType, Municipality, QuantityBracket } from "@prisma/client";
 import { hashPassword } from "./auth";
 import { prisma } from "./prisma";
@@ -26,11 +26,63 @@ const drivers: { username: string; name: string; bin: BinType; plate: string }[]
   { username: "demo_driver_brown", name: "Ελένη Βασιλείου", bin: "BROWN", plate: "ΥΝΒ 4104" },
 ];
 
-function atHour(dayOffset: number, hourUtc: number, minute = 0) {
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() + dayOffset);
-  date.setUTCHours(hourUtc, minute, 0, 0);
-  return date;
+/** Civil clock time in Europe/Athens, `dayOffset` days from the Athens date of this run. */
+function athensAt(dayOffset: number, hour: number, minute = 0) {
+  const today = athensParts(new Date());
+  const civil = new Date(Date.UTC(today.year, today.month - 1, today.day + dayOffset));
+  return athensInstant(civil.getUTCFullYear(), civil.getUTCMonth() + 1, civil.getUTCDate(), hour, minute, 0);
+}
+
+async function replaceScheduledShift(input: {
+  municipalityId: string;
+  driverId: string;
+  truckId: string;
+  start: Date;
+  bookings: { name: string; at: Date; bracket: QuantityBracket; kg: number; bin: BinType }[];
+}) {
+  const day = athensParts(input.start);
+  const dayStart = athensInstant(day.year, day.month, day.day, 0, 0, 0);
+  const dayEnd = athensInstant(day.year, day.month, day.day, 23, 59, 59);
+  const live = await prisma.shift.findFirst({
+    where: {
+      driverId: input.driverId,
+      status: { in: ["IN_PROGRESS", "PAUSED"] },
+      startsAt: { gte: dayStart, lte: dayEnd },
+    },
+  });
+  if (live) return;
+  const existing = await prisma.shift.findMany({
+    where: { driverId: input.driverId, status: { in: ["SCHEDULED", "ENDED"] }, startsAt: { gte: dayStart, lte: dayEnd } },
+  });
+  for (const shift of existing) {
+    await prisma.booking.deleteMany({ where: { shiftId: shift.id } });
+    await prisma.slotClosure.deleteMany({ where: { shiftId: shift.id } });
+    await prisma.shift.delete({ where: { id: shift.id } });
+  }
+  const shift = await prisma.shift.create({
+    data: {
+      municipalityId: input.municipalityId,
+      truckId: input.truckId,
+      driverId: input.driverId,
+      startsAt: input.start,
+      endsAt: shiftEndsAt(input.start),
+    },
+  });
+  for (const slot of input.bookings) {
+    const business = await prisma.business.findFirst({ where: { municipalityId: input.municipalityId, name: slot.name } });
+    if (!business) continue;
+    await prisma.booking.create({
+      data: {
+        municipalityId: input.municipalityId,
+        businessId: business.id,
+        shiftId: shift.id,
+        binType: slot.bin,
+        bracket: slot.bracket,
+        kg: slot.kg,
+        scheduledAt: slot.at,
+      },
+    });
+  }
 }
 
 export async function seedDemo(municipality: Municipality) {
@@ -107,74 +159,32 @@ export async function seedDemo(municipality: Municipality) {
   const green = driverUsers[0];
   const greenTruck = await prisma.truck.findFirst({ where: { driverId: green.id, binType: "GREEN" } });
   if (!greenTruck) return;
-  const todayStart = atHour(0, 6);
-  const todayEnd = atHour(0, 12);
-  let today = await prisma.shift.findFirst({ where: { driverId: green.id, startsAt: todayStart } });
-  if (!today) {
-    today = await prisma.shift.create({
-      data: {
-        municipalityId: municipality.id,
-        truckId: greenTruck.id,
-        driverId: green.id,
-        startsAt: todayStart,
-        endsAt: todayEnd,
-      },
-    });
-    const businesses = await prisma.business.findMany({ where: { municipalityId: municipality.id, status: "APPROVED" } });
-    const slots: { name: string; at: Date; bracket: QuantityBracket; kg: number }[] = [
-      { name: "Καφέ Η Πλάκα", at: atHour(0, 6, 30), bracket: "KG_10_20", kg: 20 },
-      { name: "Βιβλία Εξαρχείων", at: atHour(0, 7, 15), bracket: "KG_0_10", kg: 10 },
-      { name: "Φούρνος Κουκακίου", at: atHour(0, 8, 0), bracket: "KG_20_50", kg: 50 },
-      { name: "Μανάβικο Παγκρατίου", at: atHour(0, 8, 45), bracket: "KG_10_20", kg: 20 },
-    ];
-    for (const slot of slots) {
-      const business = businesses.find((row) => row.name === slot.name);
-      if (!business) continue;
-      await prisma.booking.create({
-        data: {
-          municipalityId: municipality.id,
-          businessId: business.id,
-          shiftId: today.id,
-          binType: "GREEN",
-          bracket: slot.bracket,
-          kg: slot.kg,
-          scheduledAt: slot.at,
-        },
-      });
-    }
-  }
+  await replaceScheduledShift({
+    municipalityId: municipality.id,
+    driverId: green.id,
+    truckId: greenTruck.id,
+    start: athensAt(0, 8),
+    bookings: [
+      { name: "Καφέ Η Πλάκα", at: athensAt(0, 8, 30), bracket: "KG_10_20", kg: 20, bin: "GREEN" },
+      { name: "Βιβλία Εξαρχείων", at: athensAt(0, 9, 15), bracket: "KG_0_10", kg: 10, bin: "GREEN" },
+      { name: "Φούρνος Κουκακίου", at: athensAt(0, 10, 0), bracket: "KG_20_50", kg: 50, bin: "GREEN" },
+      { name: "Μανάβικο Παγκρατίου", at: athensAt(0, 10, 45), bracket: "KG_10_20", kg: 20, bin: "GREEN" },
+    ],
+  });
 
   for (const [index, account] of driverUsers.entries()) {
     const truck = await prisma.truck.findFirst({ where: { driverId: account.id } });
     if (!truck) continue;
-    const start = atHour(1, 6);
-    const exists = await prisma.shift.findFirst({ where: { driverId: account.id, startsAt: start } });
-    if (exists) continue;
-    const shift = await prisma.shift.create({
-      data: {
-        municipalityId: municipality.id,
-        truckId: truck.id,
-        driverId: account.id,
-        startsAt: start,
-        endsAt: atHour(1, 12),
-      },
+    await replaceScheduledShift({
+      municipalityId: municipality.id,
+      driverId: account.id,
+      truckId: truck.id,
+      start: athensAt(1, 8),
+      bookings:
+        index === 0
+          ? [{ name: "Καφέ Η Πλάκα", at: athensAt(1, 9, 0), bracket: "KG_0_10", kg: 10, bin: truck.binType }]
+          : [],
     });
-    if (index === 0) {
-      const shop = await prisma.business.findFirst({ where: { name: "Καφέ Η Πλάκα" } });
-      if (shop) {
-        await prisma.booking.create({
-          data: {
-            municipalityId: municipality.id,
-            businessId: shop.id,
-            shiftId: shift.id,
-            binType: "GREEN",
-            bracket: "KG_0_10",
-            kg: 10,
-            scheduledAt: atHour(1, 7, 0),
-          },
-        });
-      }
-    }
   }
   console.log("Demo ready. Password for every demo_* account: demo1234");
 }

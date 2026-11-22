@@ -8,7 +8,7 @@ import { colors, styles } from "../src/theme";
 
 const bins = ["GREEN", "BLUE", "YELLOW", "BROWN"] as const;
 const brackets = ["KG_0_10", "KG_10_20", "KG_20_50", "KG_50_PLUS"] as const;
-type Slot = { at: string; remainingKg: number; bookable: boolean };
+type Slot = { at: string; bookable: boolean };
 
 export default function BookScreen() {
   const session = useSession();
@@ -28,16 +28,14 @@ export default function BookScreen() {
   });
   const timeIndex = step - 3;
   const phase = step === 0 ? "bin" : step === 1 ? "kg" : step === 2 ? "day" : step < 3 + picked.length ? "time" : "review";
-  const needed = bracket === "KG_10_20" ? 20 : bracket === "KG_20_50" ? 50 : bracket === "KG_50_PLUS" ? 75 : 10;
-
   useEffect(() => {
     const bin = picked[timeIndex];
     if (phase !== "time" || !bin) return;
-    session.api<{ slots: Slot[]; suggested: string | null }>(`/slots?binType=${bin}`).then((body) => {
-      setSlots(body.slots.filter((slot) => slot.at.slice(0, 10) === day && slot.remainingKg >= needed));
+    session.api<{ slots: Slot[]; suggested: string | null }>(`/slots?binType=${bin}&bracket=${bracket}`).then((body) => {
+      setSlots(body.slots.filter((slot) => slot.at.slice(0, 10) === day));
       setSuggested(body.suggested);
     });
-  }, [phase, timeIndex, day]);
+  }, [phase, timeIndex, day, bracket]);
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -61,9 +59,9 @@ export default function BookScreen() {
         {phase === "day" ? days.map((item) => (
           <Pressable key={item} style={[styles.card, day === item && { borderColor: colors.olive }]} onPress={() => setDay(item)}><Text>{item}</Text></Pressable>
         )) : null}
-        {phase === "time" ? slots.slice(0, 8).map((slot) => (
-          <Pressable key={slot.at} style={[styles.card, times[picked[timeIndex]] === slot.at && { borderColor: colors.olive }, slot.at === suggested && { backgroundColor: "#e7f6ee" }]} onPress={() => setTimes({ ...times, [picked[timeIndex]]: slot.at })}>
-            <Text>{formatWhen(slot.at, locale)}{slot.at === suggested ? ` · ${t(locale, "suggested")}` : ""}</Text>
+        {phase === "time" ? slots.map((slot) => (
+          <Pressable key={slot.at} disabled={!slot.bookable} style={[styles.card, times[picked[timeIndex]] === slot.at && { borderColor: colors.olive }, slot.at === suggested && { backgroundColor: "#e7f6ee" }, !slot.bookable && { opacity: 0.4 }]} onPress={() => setTimes({ ...times, [picked[timeIndex]]: slot.at })}>
+            <Text>{formatWhen(slot.at, locale)}{slot.at === suggested ? ` · ${t(locale, "suggested")}` : ""}{slot.bookable ? "" : ` · ${t(locale, "unavailable")}`}</Text>
           </Pressable>
         )) : null}
         {phase === "review" ? picked.map((bin) => <Text key={bin} style={{ fontSize: 18, marginTop: 8 }}>{t(locale, `bin_${bin}` as MessageKey)}</Text>) : null}

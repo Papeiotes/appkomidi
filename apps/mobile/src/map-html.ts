@@ -25,11 +25,13 @@ export function liveHtml(lat: number, lng: number) {
 <script>
 const map = L.map('map').setView([${lat}, ${lng}], 14);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap'}).addTo(map);
-let van = L.circleMarker([${lat}, ${lng}], {radius:9, color:'#142018', weight:3, fillColor:'#1b7f4a', fillOpacity:1}).addTo(map);
-let stop = null;
+let van = L.circleMarker([${lat}, ${lng}], {radius:9, color:'#142018', weight:3, fillColor:'#1b7f4a', fillOpacity:0, opacity:0}).addTo(map);
 let anim = 0;
+let framed = "";
 window.setVan = (lat, lng) => {
-  const from = van.getLatLng();
+  const hidden = van.options.fillOpacity === 0;
+  van.setStyle({opacity:1, fillOpacity:1});
+  const from = hidden ? L.latLng(lat, lng) : van.getLatLng();
   const started = performance.now();
   cancelAnimationFrame(anim);
   const step = (now) => {
@@ -39,14 +41,30 @@ window.setVan = (lat, lng) => {
   };
   anim = requestAnimationFrame(step);
 };
-window.setStop = (lat, lng) => {
-  if (!stop) stop = L.circleMarker([lat, lng], {radius:7, color:'#1b7f4a', fillColor:'#ffffff', fillOpacity:1, weight:3}).addTo(map);
-  else stop.setLatLng([lat, lng]);
+window.setStops = (stops) => {
+  if (window.pins) map.removeLayer(window.pins);
+  window.pins = L.layerGroup();
+  (stops || []).forEach((stop) => {
+    L.circleMarker([stop.lat, stop.lng], {
+      radius: stop.active ? 11 : 7,
+      color: stop.active ? "#e39b2b" : "#1b7f4a",
+      weight: 3,
+      fillColor: stop.active ? "#1b7f4a" : "#ffffff",
+      fillOpacity: 1,
+    }).addTo(window.pins);
+  });
+  window.pins.addTo(map);
+  const signature = (stops || []).map((stop) => stop.id).join("|");
+  if (signature && signature !== framed) {
+    framed = signature;
+    if (stops.length === 1) map.setView([stops[0].lat, stops[0].lng], 15);
+    else map.fitBounds(stops.map((stop) => [stop.lat, stop.lng]), { padding: [36, 36], maxZoom: 16 });
+  }
 };
 window.setLine = (pairs) => {
   if (window.line) map.removeLayer(window.line);
   if (!pairs || pairs.length < 2) return;
-  window.line = L.polyline(pairs, {color:'#1b7f4a', weight:4}).addTo(map);
+  window.line = L.polyline(pairs, {color:"#1b7f4a", weight:4}).addTo(map);
 };
 </script></body></html>`;
 }

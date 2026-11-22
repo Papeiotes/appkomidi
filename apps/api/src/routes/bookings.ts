@@ -37,6 +37,11 @@ bookingsRouter.get(
     const business = await prisma.business.findUnique({ where: { id: businessIdOf(req) ?? "" } });
     if (!business || business.status !== "APPROVED") throw new HttpError(403, "NOT_APPROVED");
     const type = bin(String(req.query.binType ?? "GREEN"));
+    const bracketQuery = String(req.query.bracket ?? "");
+    const needed =
+      bracketQuery === "KG_0_10" || bracketQuery === "KG_10_20" || bracketQuery === "KG_20_50" || bracketQuery === "KG_50_PLUS"
+        ? kgForBracket(bracketQuery, env.overflowKg)
+        : 1;
     const now = new Date();
     const until = new Date(now.getTime() + 7 * 24 * 60 * 60_000);
     const shifts = await prisma.shift.findMany({
@@ -60,19 +65,26 @@ bookingsRouter.get(
         const current = map.get(key);
         const slotRemaining = closed.has(key) ? 0 : remaining;
         if (!current || slotRemaining > current.remainingKg) {
-          map.set(key, { at: key, remainingKg: Math.max(0, slotRemaining), bookable: slotRemaining > 0 });
+          map.set(key, { at: key, remainingKg: Math.max(0, slotRemaining), bookable: slotRemaining >= needed });
         }
       }
     }
     const slots = [...map.values()].sort((a, b) => a.at.localeCompare(b.at));
     const nearby = shifts
       .flatMap((shift) => shift.bookings)
-      .filter((booking) => haversineMeters(business, { lat: booking.business.lat, lng: booking.business.lng }) < 800);
+      .filter(
+        (booking) =>
+          booking.businessId !== business.id &&
+          haversineMeters(business, { lat: booking.business.lat, lng: booking.business.lng }) < 800,
+      );
     const suggested = suggestSlot(
       slots.filter((slot) => slot.bookable).map((slot) => slot.at),
       nearby.map((booking) => booking.scheduledAt.toISOString()),
     );
-    res.json({ slots, suggested, overflowKg: env.overflowKg });
+    res.json({
+      slots: slots.map((slot) => ({ at: slot.at, bookable: slot.bookable })),
+      suggested,
+    });
   }),
 );
 

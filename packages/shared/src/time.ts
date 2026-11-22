@@ -55,6 +55,22 @@ export function copyAthensClock(source: Date, date: string): Date {
   return athensInstant(year, month, day, clock.hour, clock.minute, clock.second);
 }
 
+export function athensDateKey(date: Date): string {
+  const parts = athensParts(date);
+  const month = String(parts.month).padStart(2, "0");
+  const day = String(parts.day).padStart(2, "0");
+  return `${parts.year}-${month}-${day}`;
+}
+
+/** Inclusive Athens civil day, from 00:00:00 through 23:59:59. */
+export function athensDayBounds(from = new Date()): { start: Date; end: Date } {
+  const parts = athensParts(from);
+  return {
+    start: athensInstant(parts.year, parts.month, parts.day, 0, 0, 0),
+    end: athensInstant(parts.year, parts.month, parts.day, 23, 59, 59),
+  };
+}
+
 /** Calendar date in Athens, plus `days` civil days (not 24-hour chunks). */
 export function athensDatePlus(days: number, from = new Date()): string {
   const today = athensParts(from);

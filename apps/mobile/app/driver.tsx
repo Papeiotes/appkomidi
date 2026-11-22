@@ -10,7 +10,7 @@ import { explain, useSession } from "../src/session";
 import { colors } from "../src/theme";
 
 type Stop = { id: string; business: string; phone: string; label: string; kg: number; bracket: string; binType: string; scheduledAt: string; lat: number; lng: number };
-type Payload = { shift: { id: string; status: string; lastLat: number | null; lastLng: number | null } | null; stops: Stop[]; nextStopId: string | null };
+type Payload = { shift: { id: string; status: string; lastLat: number | null; lastLng: number | null } | null; stops: Stop[]; nextStopId: string | null; eta?: string | null; route?: { coordinates: [number, number][] } | null };
 
 export default function DriverScreen() {
   const session = useSession();
@@ -21,11 +21,9 @@ export default function DriverScreen() {
   const [error, setError] = useState<string | null>(null);
   const mapHtml = useRef(liveHtml(37.9838, 23.7275)).current;
   const mapRef = useRef<WebView>(null);
-  const nextRef = useRef<{ lat: number; lng: number } | null>(null);
 
-  function moveVan(lat: number, lng: number, stop?: { lat: number; lng: number } | null) {
-    const line = stop ? `window.setStop && window.setStop(${stop.lat}, ${stop.lng}); window.setLine && window.setLine([[${lat}, ${lng}], [${stop.lat}, ${stop.lng}]]);` : "";
-    mapRef.current?.injectJavaScript(`window.setVan && window.setVan(${lat}, ${lng}); ${line} true;`);
+  function moveVan(lat: number, lng: number) {
+    mapRef.current?.injectJavaScript(`window.setVan && window.setVan(${lat}, ${lng}); true;`);
   }
 
   async function load() {
@@ -46,7 +44,7 @@ export default function DriverScreen() {
       sub = await Location.watchPositionAsync({ distanceInterval: 8, timeInterval: 2000 }, (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
-        moveVan(lat, lng, nextRef.current);
+        moveVan(lat, lng);
         void session.api(`/driver/shifts/${data.shift!.id}/location`, {
           method: "POST",
           body: JSON.stringify({ lat, lng }),
@@ -58,12 +56,19 @@ export default function DriverScreen() {
 
   const shift = data?.shift;
   const next = data?.stops.find((stop) => stop.id === data?.nextStopId);
-  nextRef.current = next ?? null;
+  const done = (data?.stops ?? []).filter((stop) => stop.status === "COMPLETED");
 
   useEffect(() => {
     if (shift?.lastLat == null || shift.lastLng == null) return;
-    moveVan(shift.lastLat, shift.lastLng, next ?? null);
-  }, [shift?.lastLat, shift?.lastLng, next?.id]);
+    moveVan(shift.lastLat, shift.lastLng);
+  }, [shift?.lastLat, shift?.lastLng]);
+
+  useEffect(() => {
+    const confirmed = (data?.stops ?? []).filter((stop) => stop.status === "CONFIRMED");
+    const pins = confirmed.map((stop) => ({ id: stop.id, lat: stop.lat, lng: stop.lng, active: stop.id === data?.nextStopId }));
+    const line = (data?.route?.coordinates ?? []).map(([lng, lat]) => [lat, lng]);
+    mapRef.current?.injectJavaScript(`window.setStops && window.setStops(${JSON.stringify(pins)}); window.setLine && window.setLine(${JSON.stringify(line)}); true;`);
+  }, [data?.stops, data?.nextStopId, data?.route]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -84,8 +89,11 @@ export default function DriverScreen() {
         <Pressable
           style={{ position: "absolute", bottom: 36, left: 24, right: 24, backgroundColor: colors.olive, borderRadius: 999, paddingVertical: 22, alignItems: "center" }}
           onPress={async () => {
-            const position = await Location.getCurrentPositionAsync({}).catch(() => null);
-            await session.api(`/driver/shifts/${shift.id}/start`, { method: "POST", body: JSON.stringify({ lat: position?.coords.latitude ?? 37.9838, lng: position?.coords.longitude ?? 23.7275 }) });
+            const position = await Promise.race([
+              Location.getCurrentPositionAsync({}).catch(() => null),
+              new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500)),
+            ]);
+            await session.api(`/driver/shifts/${shift.id}/start`, { method: "POST", body: JSON.stringify({ lat: position?.coords.latitude ?? 37.971, lng: position?.coords.longitude ?? 23.728 }) });
             await load();
           }}
         >
@@ -98,12 +106,22 @@ export default function DriverScreen() {
           <Text style={{ marginTop: 4, color: "#5c6b62" }}>{next.label}</Text>
           <Text style={{ marginTop: 8 }}>{t(locale, `bin_${next.binType}` as MessageKey)} · {t(locale, `bracket_${next.bracket}` as MessageKey)}</Text>
           <Text>{t(locale, "windowLabel")}: {formatWhen(next.scheduledAt, locale)}</Text>
+          <Text>{t(locale, "eta")}: {data?.eta ? formatWhen(data.eta, locale) : "—"}</Text>
           <Text>{next.phone}</Text>
-          {shift?.status === "IN_PROGRESS" ? (
-            <Pressable style={{ marginTop: 14, backgroundColor: colors.olive, borderRadius: 16, paddingVertical: 16, alignItems: "center" }} onPress={() => void session.api(`/driver/shifts/${shift.id}/complete`, { method: "POST" }).then(load)}>
-              <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700" }}>{t(locale, "completeStop")}</Text>
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
+            <Pressable style={{ flex: 1, borderWidth: 1, borderColor: colors.olive, borderRadius: 16, paddingVertical: 16, alignItems: "center" }} onPress={() => void session.api(`/driver/shifts/${shift.id}/${shift.status === "PAUSED" ? "resume" : "pause"}`, { method: "POST" }).then(load)}>
+              <Text style={{ color: colors.olive, fontWeight: "700" }}>{shift.status === "PAUSED" ? t(locale, "resume") : t(locale, "pause")}</Text>
             </Pressable>
-          ) : null}
+            <Pressable disabled={shift.status !== "IN_PROGRESS"} style={{ flex: 1, backgroundColor: colors.olive, borderRadius: 16, paddingVertical: 16, alignItems: "center", opacity: shift.status === "IN_PROGRESS" ? 1 : 0.4 }} onPress={() => void session.api(`/driver/shifts/${shift.id}/complete`, { method: "POST" }).then(load)}>
+              <Text style={{ color: "#fff", fontWeight: "700" }}>{t(locale, "completeStop")}</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+      {shift?.status === "ENDED" ? (
+        <View style={{ position: "absolute", left: 12, right: 12, bottom: 16, backgroundColor: "#fff", borderRadius: 24, padding: 18 }}>
+          <Text style={{ fontSize: 22, fontWeight: "700" }}>{t(locale, "shiftDone")}</Text>
+          {done.map((stop) => <Text key={stop.id} style={{ marginTop: 6 }}>{stop.business}</Text>)}
         </View>
       ) : null}
     </View>

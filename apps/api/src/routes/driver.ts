@@ -1,12 +1,17 @@
-import { isValidLatLng } from "@vardia/shared";
+import { athensDayBounds, etaForStop, isValidLatLng } from "@vardia/shared";
 import { Router } from "express";
 import type { Server } from "socket.io";
 import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../auth";
 import { HttpError, wrap } from "../http";
 import { prisma } from "../prisma";
-import { legTo } from "../routing";
+import { routeThrough } from "../routing";
 import { completeCurrentStop, currentStopId, demoPoint, recordLocation, startShift } from "../tracking";
+
+const shiftInclude = {
+  truck: true,
+  bookings: { include: { business: true }, orderBy: { scheduledAt: "asc" as const } },
+};
 
 export const driverRouter = Router();
 
@@ -15,34 +20,56 @@ driverRouter.get(
   requireAuth("DRIVER"),
   wrap(async (req, res) => {
     const auth = (req as AuthedRequest).auth;
-    const now = new Date();
-    const startOfDay = new Date(now);
-    startOfDay.setHours(0, 0, 0, 0);
-    const shift = await prisma.shift.findFirst({
-      where: {
-        driverId: auth.id,
-        status: { in: ["SCHEDULED", "IN_PROGRESS", "PAUSED"] },
-        endsAt: { gte: startOfDay },
-      },
-      include: {
-        truck: true,
-        bookings: { include: { business: true }, orderBy: { scheduledAt: "asc" } },
-      },
-      orderBy: { startsAt: "asc" },
+    const { start, end } = athensDayBounds();
+    const active = await prisma.shift.findFirst({
+      where: { driverId: auth.id, status: { in: ["IN_PROGRESS", "PAUSED"] } },
+      include: shiftInclude,
+      orderBy: { startsAt: "desc" },
     });
+    const scheduledToday = active
+      ? null
+      : await prisma.shift.findFirst({
+          where: { driverId: auth.id, status: "SCHEDULED", startsAt: { lte: end }, endsAt: { gte: start } },
+          include: shiftInclude,
+          orderBy: { startsAt: "asc" },
+        });
+    const endedToday =
+      active || scheduledToday
+        ? null
+        : await prisma.shift.findFirst({
+            where: { driverId: auth.id, status: "ENDED", endedAt: { gte: start } },
+            include: shiftInclude,
+            orderBy: { endedAt: "desc" },
+          });
+    const shift = active ?? scheduledToday ?? endedToday;
     if (!shift) {
-      res.json({ shift: null });
+      res.json({ shift: null, stops: [], nextStopId: null, eta: null, route: null });
       return;
     }
     const confirmed = new Set(shift.bookings.filter((booking) => booking.status === "CONFIRMED").map((booking) => booking.id));
-    const next = currentStopId(shift.routeOrder, shift.cursor, confirmed);
-    const nextBooking = next ? shift.bookings.find((booking) => booking.id === next.id) : null;
-    let leg = null;
-    if (nextBooking && shift.lastLat != null && shift.lastLng != null && shift.routeLocked) {
-      leg = await legTo(
-        { lat: shift.lastLat, lng: shift.lastLng },
-        { lat: nextBooking.business.lat, lng: nextBooking.business.lng },
-      );
+    const next = shift.routeLocked ? currentStopId(shift.routeOrder, shift.cursor, confirmed) : null;
+    const ordered = (shift.routeLocked ? shift.routeOrder : shift.bookings.map((booking) => booking.id))
+      .map((id) => shift.bookings.find((booking) => booking.id === id))
+      .filter((booking): booking is (typeof shift.bookings)[number] => Boolean(booking && booking.status === "CONFIRMED"));
+    const here = shift.lastLat != null && shift.lastLng != null ? { lat: shift.lastLat, lng: shift.lastLng } : null;
+    let route = null;
+    let eta: string | null = null;
+    if (shift.routeLocked && ordered.length) {
+      const points = [...(here ? [here] : []), ...ordered.map((booking) => ({ lat: booking.business.lat, lng: booking.business.lng }))];
+      if (points.length >= 2) route = await routeThrough(points);
+      if (here && next) {
+        const arrival = etaForStop({
+          start: here,
+          now: new Date(),
+          ordered: ordered.map((booking) => ({
+            id: booking.id,
+            at: { lat: booking.business.lat, lng: booking.business.lng },
+            scheduledAt: booking.scheduledAt.toISOString(),
+          })),
+          targetId: next.id,
+        });
+        eta = arrival?.toISOString() ?? null;
+      }
     }
     res.json({
       shift: {
@@ -70,7 +97,8 @@ driverRouter.get(
         label: booking.business.addressLabel,
       })),
       nextStopId: next?.id ?? null,
-      leg,
+      eta,
+      route,
     });
   }),
 );
