@@ -1,61 +1,122 @@
-# Δημοσίευση APPkomidi
+# Δημοσίευση APPkomidi στο Railway
 
-Αυτές οι οδηγίες είναι για τον ιδιοκτήτη. Ο κώδικας είναι έτοιμος. Δεν έχει γίνει deploy και δεν έχουν δημιουργηθεί λογαριασμοί Render ή Expo.
+Οι εντολές τρέχουν στον υπολογιστή σου, από τη ρίζα του αποθετηρίου. Το Railway CLI ανεβάζει τον κώδικα με `railway up`. Δεν χρειάζεται σύνδεση Git.
 
-Το site ανοίγει στο `https://appkomidi-web.onrender.com`. Το API είναι στο `https://appkomidi-api.onrender.com`. Η εφαρμογή Android εγκαθίσταται από το APK που βγάζει το Expo.
+Τα Dockerfiles χτίζονται μόνο από τη ρίζα του monorepo (`docker build -f apps/api/Dockerfile .`), γιατί το pnpm workspace περιλαμβάνει `packages/shared`.
 
-## 1. Render (ιστοσελίδα και API)
-
-1. Φτιάξε λογαριασμό στο [render.com](https://render.com).
-2. New → Blueprint. Σύνδεσε το Git αποθετήριο (Origin ή το mirror στο GitHub, αν το Render δεν βλέπει απευθείας το Origin).
-3. Το αρχείο `render.yaml` στη ρίζα φτιάχνει βάση PostgreSQL, το API και την ιστοσελίδα.
-4. Πριν πατήσεις Apply, στο web service `appkomidi-web` βάλε το `NEXT_PUBLIC_API_URL` ίσο με τη διεύθυνση του API, για παράδειγμα `https://appkomidi-api.onrender.com`. Το Next το διαβάζει την ώρα του build, οπότε αν το αλλάξεις μετά κάνε ξανά deploy στο web.
-5. Στο API συμπλήρωσε:
-   - `ADMIN_PASSWORD`: ένας δικός σου κωδικός για τον λογαριασμό `admin`.
-   - `CORS_ORIGINS`: `https://appkomidi-web.onrender.com` (χωρίς κάθετο στο τέλος). Αν έχεις και δεύτερο domain, χώρισέ τα με κόμμα.
-   - Το `JWT_SECRET` το γεννάει το Render. Το `DATABASE_URL` έρχεται μόνο του από τη βάση. Το `TZ` είναι `Europe/Athens`.
-6. Το `SEED_DEMO` είναι `0`, ώστε κάθε επανεκκίνηση να μην σβήνει τα ραντεβού. Με την πρώτη εκκίνηση δημιουργείται μόνο ο admin, αν δεν υπάρχει.
-7. Όταν το API γίνει πράσινο, άνοιξε ένα Shell στο service `appkomidi-api` και τρέξε μία φορά τη δοκιμαστική βάση:
+## 1. Εγκατάσταση και project
 
 ```bash
-SEED_DEMO=1 node apps/api/dist/seed.js
+npm i -g @railway/cli
+railway login
+railway init --name appkomidi
 ```
 
-Κωδικός για κάθε `demo_*` λογαριασμό: `demo1234`. Ο admin του περιβάλλοντος μένει αυτός που έβαλες στο `ADMIN_PASSWORD`.
+Αν το CLI ζητήσει workspace, διάλεξε το δικό σου.
 
-8. Άνοιξε `https://appkomidi-api.onrender.com/health`. Πρέπει να δεις `{"ok":true,...}`.
-9. Άνοιξε `https://appkomidi-web.onrender.com` και συνδέσου.
+```bash
+railway add --database postgres --service appkomidi-db
+railway add --service appkomidi-api
+railway add --service appkomidi-web
+```
 
-Το Socket.IO δουλεύει πάνω στο ίδιο HTTPS του API, άρα το πρόγραμμα περιήγησης χρησιμοποιεί `wss`. Το API διαβάζει το `PORT` του Render και εμπιστεύεται τον proxy (`trust proxy`).
+Στις ρυθμίσεις κάθε service (Railway → service → Settings):
 
-### Ξύπνημα πριν το demo
+- Root directory: κενό (ρίζα του repo).
+- Config file: `railway.api.toml` για το API, `railway.web.toml` για το web.
 
-Τα δωρεάν services κοιμούνται μετά από αδράνεια. Πέντε λεπτά πριν την παρουσίαση άνοιξε και τις δύο διευθύνσεις (API `/health` και το site) και περίμενε να φορτώσουν. Η πρώτη κλήση μπορεί να πάρει περίπου ένα λεπτό.
+Έτσι το API χρησιμοποιεί το `apps/api/Dockerfile` και το web το `apps/web/Dockerfile`.
 
-## 2. Android APK (Expo)
+## 2. Μεταβλητές
 
-1. Φτιάξε λογαριασμό στο [expo.dev](https://expo.dev).
-2. Στον υπολογιστή σου, μέσα στο αποθετήριο:
+Δες τα ονόματα των services με `railway service list`.
+
+API (`appkomidi-api`):
+
+```bash
+railway variable set 'DATABASE_URL=${{appkomidi-db.DATABASE_URL}}' --service appkomidi-api --skip-deploys
+railway variable set "JWT_SECRET=$(openssl rand -hex 32)" --service appkomidi-api --skip-deploys
+railway variable set TZ=Europe/Athens --service appkomidi-api --skip-deploys
+railway variable set ADMIN_USERNAME=admin --service appkomidi-api --skip-deploys
+railway variable set 'ADMIN_PASSWORD=Dimarcheio!2026' --service appkomidi-api --skip-deploys
+railway variable set ADMIN_NAME=Διαχειριστής --service appkomidi-api --skip-deploys
+railway variable set 'MUNICIPALITY_NAME=Δήμος Αθηναίων' --service appkomidi-api --skip-deploys
+railway variable set OVERFLOW_KG=75 --service appkomidi-api --skip-deploys
+railway variable set SEED_DEMO=0 --service appkomidi-api --skip-deploys
+railway variable set NOMINATIM_URL=https://nominatim.openstreetmap.org --service appkomidi-api --skip-deploys
+railway variable set OSRM_URL=https://router.project-osrm.org --service appkomidi-api --skip-deploys
+```
+
+Το `PORT` το δίνει το Railway. Μην το ορίσεις εσύ. Το `SEED_DEMO=0` μένει έτσι ώστε κάθε επανεκκίνηση να μην ξαναγράφει τις βάρδιες.
+
+Web (`appkomidi-web`), αφού υπάρχει δημόσιο URL για το API (βήμα 3):
+
+```bash
+railway variable set NEXT_PUBLIC_API_URL=https://ΔΙΕΥΘΥΝΣΗ-API --service appkomidi-web --skip-deploys
+```
+
+Χωρίς κάθετο στο τέλος. Το Next την ενσωματώνει στο build, γι' αυτό την βάζεις πριν το `railway up` του web και ξανακάνεις deploy αν την αλλάξεις.
+
+Μετά το δημόσιο URL του web:
+
+```bash
+railway variable set CORS_ORIGINS=https://ΔΙΕΥΘΥΝΣΗ-WEB --service appkomidi-api
+```
+
+Πολλά origins χωρίζονται με κόμμα. Το Socket.IO χρησιμοποιεί το ίδιο HTTPS, άρα ο browser ανοίγει `wss`.
+
+## 3. Domains και deploy
+
+```bash
+railway domain --service appkomidi-api
+railway domain --service appkomidi-web
+railway up --service appkomidi-api --detach
+railway up --service appkomidi-web --detach
+```
+
+Παρακολούθηση:
+
+```bash
+railway logs --service appkomidi-api
+railway deployment list --service appkomidi-api
+```
+
+Σε κάθε εκκίνηση το API τρέχει `prisma migrate deploy` και μετά τον server. Το health check είναι `GET /health`.
+
+Ξανά deploy μετά από αλλαγές: ίδιο `railway up --service …` από τη ρίζα.
+
+## 4. Demo seed, μία φορά
+
+Όταν το `/health` απαντά, μέσα στο container (έχει ήδη το `DATABASE_URL`):
+
+```bash
+railway ssh --service appkomidi-api -- node dist/seed.js
+```
+
+Πριν από αυτή την εντολή, για μία εκτέλεση μόνο, βάλε `SEED_DEMO=1` μπροστά:
+
+```bash
+railway ssh --service appkomidi-api -- env SEED_DEMO=1 node dist/seed.js
+```
+
+Ο κατάλογος εργασίας στο image είναι το `apps/api`, όπου βρίσκεται το `dist/seed.js`. Κωδικός κάθε λογαριασμού `demo_*`: `demo1234`. Ο admin είναι `admin` / `Dimarcheio!2026`.
+
+Μην αφήσεις `SEED_DEMO=1` στις μεταβλητές του service. Το επόμενο deploy θα ξαναγράψει τις σημερινές βάρδιες.
+
+## 5. Έλεγχος
+
+- `https://ΔΙΕΥΘΥΝΣΗ-API/health` → `{"ok":true,...}`
+- `https://ΔΙΕΥΘΥΝΣΗ-WEB` → σελίδα σύνδεσης
+- `demo_admin`, `demo_business`, `demo_driver` με `demo1234`
+
+## 6. Android APK
+
+Στο `apps/mobile/eas.json` το `EXPO_PUBLIC_API_URL` πρέπει να είναι το δημόσιο HTTPS του API. Μετά:
 
 ```bash
 cd apps/mobile
 npx eas-cli login
-```
-
-3. Στο `apps/mobile/eas.json`, στο profile `preview`, το `EXPO_PUBLIC_API_URL` πρέπει να είναι η δημόσια διεύθυνση του API, με `https://`. Άλλαξέ το αν το Render έδωσε άλλο όνομα, και κάνε commit.
-4. Χτίσε το APK (δεν το ανεβάζουμε εμείς στο Play Store):
-
-```bash
 npx eas-cli build -p android --profile preview
 ```
 
-5. Όταν τελειώσει, το Expo δίνει έναν σύνδεσμο. Κατέβασε το `.apk` ή στείλε τον σύνδεσμο στο τηλέφωνο.
-6. Στο Android επίτρεψε εγκατάσταση από αυτή την πηγή και άνοιξε το αρχείο. Το πακέτο είναι `gr.appkomidi.app`.
-7. Η τοποθεσία ζητιέται μόνο όταν ο οδηγός ξεκινάει βάρδια. Ο χάρτης είναι OpenStreetMap μέσω HTTPS, χωρίς κλειδί Google.
-
-Το profile `preview` βγάζει APK (`android.buildType: apk`), όχι AAB, ώστε να εγκαθίσταται κατευθείαν.
-
-## 3. Τι να μην αλλάξεις
-
-- Μην βάλεις `SEED_DEMO=1` μόνιμα στο Render. Κάθε νέο deploy θα ξαναγράφει τις βάρδιες της επίδειξης.
-- Μην χρησιμοποιήσεις `http://` στο τηλέφωνο. Το APK μιλάει μόνο με `https://`.
+Το profile `preview` βγάζει APK (`android.buildType: apk`). Πακέτο: `gr.appkomidi.app`.
