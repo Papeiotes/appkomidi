@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@custom-variant data-open {
+  &:where([data-state="open"]),
+  &:where([data-open]:not([data-open="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-closed {
+  &:where([data-state="closed"]),
+  &:where([data-closed]:not([data-closed="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-active {
+  &:where([data-state="active"]),
+  &:where([data-active]:not([data-active="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-horizontal {
+  &:where([data-orientation="horizontal"]) {
+    @slot;
+  }
+}
+@custom-variant data-vertical {
+  &:where([data-orientation="vertical"]) {
+    @slot;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-manrope), "Manrope", sans-serif;
+  --font-serif: var(--font-source), "Source Serif 4", serif;
+  --radius-md: 0.7rem;
+  --radius-lg: 1rem;
+}
+
+:root {
+  --background: #f3efe6;
+  --foreground: #1c2416;
+  --card: #fffdf8;
+  --card-foreground: #1c2416;
+  --primary: #2f4a34;
+  --primary-foreground: #f7f4ec;
+  --secondary: #e6efe4;
+  --secondary-foreground: #1c2416;
+  --muted: #ece6da;
+  --muted-foreground: #5c6756;
+  --accent: #e39b2b;
+  --accent-foreground: #1c2416;
+  --destructive: #9d3b2c;
+  --border: #e0d7c8;
+  --input: #d9d0c1;
+  --ring: #2f4a34;
+  --radius: 0.8rem;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: #e7efe4;
+  font-family: var(--font-sans);
+}

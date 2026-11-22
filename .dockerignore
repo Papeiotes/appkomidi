@@ -1,0 +1,9 @@
+node_modules
+**/node_modules
+**/.next
+**/dist
+**/.expo
+.git
+*.log
+apps/api/.env
+apps/web/.env.local

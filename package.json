@@ -1,0 +1,16 @@
+{
+  "name": "vardia",
+  "private": true,
+  "packageManager": "pnpm@10.33.4",
+  "scripts": {
+    "ensure-env": "node scripts/ensure-env.mjs",
+    "dev": "pnpm ensure-env && pnpm --filter @vardia/shared build && pnpm --parallel --filter @vardia/api --filter @vardia/web dev",
+    "dev:api": "pnpm ensure-env && pnpm --filter @vardia/shared build && pnpm --filter @vardia/api dev",
+    "dev:web": "pnpm --filter @vardia/web dev",
+    "dev:mobile": "pnpm --filter @vardia/mobile start",
+    "build": "pnpm --filter @vardia/shared build && pnpm --filter @vardia/api build && pnpm --filter @vardia/web build",
+    "test": "pnpm --filter @vardia/shared test && pnpm --filter @vardia/shared build && pnpm --filter @vardia/api test",
+    "db:migrate": "pnpm --filter @vardia/api exec prisma migrate deploy",
+    "db:seed": "pnpm --filter @vardia/api exec prisma db seed"
+  }
+}

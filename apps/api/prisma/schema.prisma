@@ -1,0 +1,191 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  BUSINESS_OWNER
+  DRIVER
+  EMPLOYEE
+}
+
+enum BusinessStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ShiftDirection {
+  TO_WORK
+  FROM_WORK
+}
+
+enum ShiftStatus {
+  DRAFT
+  OPEN
+  LOCKED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  name          String
+  phone         String?
+  role          Role
+  locale        String         @default("el")
+  businessId    String?
+  business      Business?      @relation("BusinessMembers", fields: [businessId], references: [id])
+  ownedBusiness Business?      @relation("BusinessOwner")
+  driverShifts  Shift[]        @relation("ShiftDriver")
+  bookings      Booking[]
+  notifications Notification[]
+  pings         LocationPing[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Business {
+  id            String         @id @default(cuid())
+  name          String
+  taxId         String?
+  address       String
+  lat           Float
+  lng           Float
+  status        BusinessStatus @default(PENDING)
+  inviteCode    String         @unique
+  rejectionNote String?
+  ownerId       String         @unique
+  owner         User           @relation("BusinessOwner", fields: [ownerId], references: [id])
+  members       User[]         @relation("BusinessMembers")
+  vehicles      Vehicle[]
+  shifts        Shift[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Vehicle {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  plate      String
+  label      String?
+  seats      Int
+  shifts     Shift[]
+  createdAt  DateTime @default(now())
+}
+
+model Shift {
+  id           String         @id @default(cuid())
+  businessId   String
+  business     Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  driverId     String?
+  driver       User?          @relation("ShiftDriver", fields: [driverId], references: [id])
+  vehicleId    String?
+  vehicle      Vehicle?       @relation(fields: [vehicleId], references: [id])
+  title        String
+  direction    ShiftDirection
+  departsAt    DateTime
+  capacity     Int
+  lockMinutes  Int            @default(30)
+  status       ShiftStatus    @default(DRAFT)
+  notes        String?
+  musterLat    Float
+  musterLng    Float
+  musterLabel  String
+  destLat      Float
+  destLng      Float
+  destLabel    String
+  startedAt    DateTime?
+  completedAt  DateTime?
+  lastLat      Float?
+  lastLng      Float?
+  lastHeading  Float?
+  lastSpeed    Float?
+  lastPingAt   DateTime?
+  bookings     Booking[]
+  pings        LocationPing[]
+  arrivals     ArrivalEvent[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([businessId, departsAt])
+  @@index([driverId, departsAt])
+  @@index([status])
+}
+
+model Booking {
+  id          String        @id @default(cuid())
+  shiftId     String
+  shift       Shift         @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  seats       Int           @default(1)
+  status      BookingStatus @default(CONFIRMED)
+  pickupLat   Float
+  pickupLng   Float
+  pickupLabel String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([shiftId, status])
+  @@index([userId])
+}
+
+model LocationPing {
+  id         String   @id @default(cuid())
+  shiftId    String
+  shift      Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  driverId   String
+  driver     User     @relation(fields: [driverId], references: [id])
+  lat        Float
+  lng        Float
+  heading    Float?
+  speed      Float?
+  recordedAt DateTime @default(now())
+
+  @@index([shiftId, recordedAt])
+}
+
+model ArrivalEvent {
+  id        String   @id @default(cuid())
+  shiftId   String
+  shift     Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  userId    String
+  bookingId String
+  distanceM Float
+  createdAt DateTime @default(now())
+
+  @@unique([shiftId, userId])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  titleEl   String
+  titleEn   String
+  bodyEl    String
+  bodyEn    String
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+}
