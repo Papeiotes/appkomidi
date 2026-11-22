@@ -4,8 +4,11 @@ import {
   createSerialShiftLock,
   evaluateCancel,
   evaluateCapacity,
+  isSameConfirmedSlot,
   isValidAfm,
   kgForBracket,
+  openSlotInstants,
+  slotInstants,
   suggestSlot,
 } from "../src/booking";
 
@@ -54,14 +57,22 @@ describe("kilograms and capacity", () => {
   });
 
   it("refuses anything beyond 7 days and an off-grid minute", () => {
-    expect(capacity({ scheduledAt: new Date("2026-12-05T08:00:00.000Z") })).toEqual({
+    expect(
+      capacity({
+        startsAt: new Date("2026-12-01T06:00:00.000Z"),
+        endsAt: new Date("2026-12-01T12:00:00.000Z"),
+        scheduledAt: new Date("2026-12-01T08:00:00.000Z"),
+      }),
+    ).toEqual({ ok: true, remainingAfter: 80 });
+    expect(capacity({ scheduledAt: new Date("2027-01-15T08:00:00.000Z") })).toEqual({
       ok: false,
       code: "OUTSIDE_HORIZON",
     });
-    expect(capacity({ scheduledAt: new Date("2026-11-23T08:07:00.000Z") })).toEqual({
+    expect(capacity({ scheduledAt: new Date("2026-11-23T08:15:00.000Z") })).toEqual({
       ok: false,
       code: "NOT_ALIGNED",
     });
+    expect(capacity({ scheduledAt: new Date("2026-11-23T08:30:00.000Z") })).toEqual({ ok: true, remainingAfter: 80 });
   });
 
   it("lets a business cancel until 15 minutes before, and not after", () => {
@@ -118,6 +129,27 @@ describe("row lock", () => {
     expect(results.filter((result) => result.ok)).toHaveLength(1);
     expect(results.filter((result) => !result.ok && result.code === "TRUCK_FULL")).toHaveLength(1);
     expect(used).toBe(75);
+  });
+});
+
+describe("shift slots", () => {
+  it("lists a 30-minute grid and keeps later slots after the shift has started", () => {
+    const startsAt = new Date("2026-11-22T06:00:00.000Z");
+    const endsAt = new Date("2026-11-22T12:00:00.000Z");
+    const all = slotInstants(startsAt, endsAt);
+    expect(all[0].toISOString()).toBe("2026-11-22T06:00:00.000Z");
+    expect(all[1].toISOString()).toBe("2026-11-22T06:30:00.000Z");
+    expect(all.every((instant) => instant.getUTCMinutes() % 30 === 0)).toBe(true);
+    const open = openSlotInstants(startsAt, endsAt, new Date("2026-11-22T08:15:00.000Z"));
+    expect(open[0].toISOString()).toBe("2026-11-22T08:30:00.000Z");
+    expect(open.some((instant) => instant.toISOString() === "2026-11-22T06:00:00.000Z")).toBe(false);
+  });
+
+  it("rejects a second confirmed booking of the same bin at the same time", () => {
+    const existing = [{ binType: "BLUE", scheduledAt: "2026-11-28T06:00:00.000Z", status: "CONFIRMED" }];
+    expect(isSameConfirmedSlot(existing, "BLUE", "2026-11-28T06:00:00.000Z")).toBe(true);
+    expect(isSameConfirmedSlot(existing, "GREEN", "2026-11-28T06:00:00.000Z")).toBe(false);
+    expect(isSameConfirmedSlot([{ ...existing[0], status: "CANCELLED" }], "BLUE", "2026-11-28T06:00:00.000Z")).toBe(false);
   });
 });
 

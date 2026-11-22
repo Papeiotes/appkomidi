@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: appkomidi-api
+    runtime: node
+    plan: free
+    buildCommand: corepack enable && corepack prepare pnpm@10.33.4 --activate && pnpm install --frozen-lockfile && pnpm --filter @vardia/shared build && pnpm --filter @vardia/api exec prisma generate && pnpm --filter @vardia/api build
+    startCommand: pnpm --filter @vardia/api exec prisma migrate deploy && node apps/api/dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: appkomidi-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: TZ
+        value: Europe/Athens
+      - key: SEED_DEMO
+        value: "0"
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_NAME
+        value: Διαχειριστής
+      - key: MUNICIPALITY_NAME
+        value: Δήμος Αθηναίων
+      - key: OVERFLOW_KG
+        value: "75"
+      - key: NOMINATIM_URL
+        value: https://nominatim.openstreetmap.org
+      - key: OSRM_URL
+        value: https://router.project-osrm.org
+
+  - type: web
+    name: appkomidi-web
+    runtime: node
+    plan: free
+    buildCommand: corepack enable && corepack prepare pnpm@10.33.4 --activate && pnpm install --frozen-lockfile && pnpm --filter @vardia/shared build && pnpm --filter @vardia/web build
+    startCommand: pnpm --filter @vardia/web start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://appkomidi-api.onrender.com
+
+databases:
+  - name: appkomidi-db
+    plan: free
+    databaseName: appkomidi
+    user: appkomidi

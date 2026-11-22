@@ -1,7 +1,7 @@
 import { t } from "@vardia/shared";
 import { Link, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Image, Pressable, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { explain, useSession, type User } from "../src/session";
 import { colors, styles } from "../src/theme";
@@ -21,9 +21,16 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      <View style={{ height: 168 }}>
+        <Image source={require("../assets/athens.webp")} style={{ width: "100%", height: 168 }} resizeMode="cover" />
+        <View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: "rgba(27,127,74,0.5)", justifyContent: "flex-end", padding: 16 }}>
+          <Text style={{ color: "#fff", fontSize: 28, fontWeight: "700" }}>{t(locale, "brand")}</Text>
+          <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, marginTop: 4 }}>{t(locale, "photoCredit")}</Text>
+        </View>
+      </View>
       <View style={styles.pad}>
         <View style={styles.row}>
-          <Text style={[styles.title, { color: colors.olive }]}>{t(locale, "brand")}</Text>
+          <Text style={{ color: colors.olive, fontWeight: "600" }}>{t(locale, "cityBrand")}</Text>
           <Pressable hitSlop={12} style={{ minHeight: 44, minWidth: 44, alignItems: "center", justifyContent: "center" }} onPress={() => session.setLocale(locale === "el" ? "en" : "el")}>
             <Text>{locale === "el" ? "EN" : "ΕΛ"}</Text>
           </Pressable>

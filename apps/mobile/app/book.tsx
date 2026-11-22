@@ -1,4 +1,4 @@
-import { athensDateKey, athensDatePlus, athensParts, formatWhen, t, type Locale, type MessageKey } from "@vardia/shared";
+import { HORIZON_DAYS, athensDateKey, athensDatePlus, athensParts, formatWhen, t, type Locale, type MessageKey } from "@vardia/shared";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
@@ -37,7 +37,7 @@ export default function BookScreen() {
   const [times, setTimes] = useState<Record<string, string>>({});
   const [slots, setSlots] = useState<Slot[]>([]);
   const [suggested, setSuggested] = useState<string | null>(null);
-  const days = Array.from({ length: 7 }, (_, index) => athensDatePlus(index));
+  const days = Array.from({ length: HORIZON_DAYS }, (_, index) => athensDatePlus(index));
   const total = 2 + picked.length * 2 + 1;
   const afterDay = step - 2;
   const binPair = Math.floor(afterDay / 2);

@@ -43,16 +43,8 @@ async function replaceScheduledShift(input: {
   const day = athensParts(input.start);
   const dayStart = athensInstant(day.year, day.month, day.day, 0, 0, 0);
   const dayEnd = athensInstant(day.year, day.month, day.day, 23, 59, 59);
-  const live = await prisma.shift.findFirst({
-    where: {
-      driverId: input.driverId,
-      status: { in: ["IN_PROGRESS", "PAUSED"] },
-      startsAt: { gte: dayStart, lte: dayEnd },
-    },
-  });
-  if (live) return;
   const existing = await prisma.shift.findMany({
-    where: { driverId: input.driverId, status: { in: ["SCHEDULED", "ENDED"] }, startsAt: { gte: dayStart, lte: dayEnd } },
+    where: { driverId: input.driverId, startsAt: { gte: dayStart, lte: dayEnd } },
   });
   for (const shift of existing) {
     await prisma.booking.deleteMany({ where: { shiftId: shift.id } });

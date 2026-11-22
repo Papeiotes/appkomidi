@@ -12,4 +12,8 @@ export const env = {
   overflowKg: Number(process.env.OVERFLOW_KG ?? 75),
   seedDemo: process.env.SEED_DEMO !== "0",
   nodeEnv: process.env.NODE_ENV ?? "development",
+  corsOrigins: (process.env.CORS_ORIGINS ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean),
 };

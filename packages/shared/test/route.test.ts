@@ -29,6 +29,24 @@ describe("time-window route", () => {
   });
 });
 
+describe("adding a stop to a populated shift", () => {
+  it("still finds a feasible time instead of rejecting every slot", () => {
+    const planned = optimizeRoute({
+      start: { lat: 37.9722, lng: 23.7302 },
+      now: new Date("2026-11-22T06:00:00.000Z"),
+      stops: [
+        { id: "exarchia", at: { lat: 37.9862, lng: 23.7342 }, scheduledAt: "2026-11-22T07:00:00.000Z" },
+        { id: "plaka", at: { lat: 37.9722, lng: 23.7302 }, scheduledAt: "2026-11-22T08:00:00.000Z" },
+        { id: "pangrati", at: { lat: 37.9688, lng: 23.7462 }, scheduledAt: "2026-11-22T09:00:00.000Z" },
+        { id: "koukaki", at: { lat: 37.9662, lng: 23.7265 }, scheduledAt: "2026-11-22T09:30:00.000Z" },
+        { id: "new", at: { lat: 37.9722, lng: 23.7302 }, scheduledAt: "2026-11-22T11:00:00.000Z" },
+      ],
+    });
+    expect(planned.feasible).toBe(true);
+    expect(planned.order).toContain("new");
+  });
+});
+
 describe("suggestion ranking", () => {
   it("prefers the slot that adds the least travel next to a nearby booking", () => {
     const ranked = rankSlots({

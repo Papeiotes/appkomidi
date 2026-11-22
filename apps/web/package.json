@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -p 4108",
     "build": "next build",
-    "start": "next start -p 4108",
+    "start": "next start -H 0.0.0.0 -p ${PORT:-4108}",
     "lint": "eslint"
   },
   "dependencies": {

@@ -1,4 +1,4 @@
-import { kgForBracket, optimizeRoute, rankSlots, slotInstants, type BinType, type QuantityBracket } from "@vardia/shared";
+import { HORIZON_DAYS, kgForBracket, openSlotInstants, optimizeRoute, rankSlots, type BinType, type QuantityBracket } from "@vardia/shared";
 import { Router } from "express";
 import type { Server } from "socket.io";
 import { z } from "zod";
@@ -43,7 +43,7 @@ bookingsRouter.get(
         ? kgForBracket(bracketQuery, env.overflowKg)
         : 1;
     const now = new Date();
-    const until = new Date(now.getTime() + 7 * 24 * 60 * 60_000);
+    const until = new Date(now.getTime() + HORIZON_DAYS * 24 * 60 * 60_000);
     const shifts = await prisma.shift.findMany({
       where: {
         municipalityId: business.municipalityId,
@@ -58,8 +58,7 @@ bookingsRouter.get(
     for (const shift of shifts) {
       const used = shift.bookings.reduce((sum, booking) => sum + booking.kg, 0);
       const closed = new Set(shift.closures.map((closure) => closure.slotAt.toISOString()));
-      for (const instant of slotInstants(shift.startsAt, shift.endsAt)) {
-        if (instant <= now || instant > until) continue;
+      for (const instant of openSlotInstants(shift.startsAt, shift.endsAt, now)) {
         const key = instant.toISOString();
         const remaining = shift.truck.capacityKg - used;
         const current = map.get(key);
@@ -79,8 +78,9 @@ bookingsRouter.get(
               { id: "new", at: { lat: business.lat, lng: business.lng }, scheduledAt: key },
             ],
           }).feasible;
-        if (!current || slotRemaining > current.remainingKg) {
-          map.set(key, { at: key, remainingKg: Math.max(0, slotRemaining), bookable: fits });
+        const candidate = { at: key, remainingKg: Math.max(0, slotRemaining), bookable: fits };
+        if (!current || (candidate.bookable && !current.bookable) || (candidate.bookable === current.bookable && candidate.remainingKg > current.remainingKg)) {
+          map.set(key, candidate);
         }
       }
     }

@@ -252,11 +252,11 @@ adminRouter.post(
         truckId: z.string(),
         driverId: z.string(),
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-        time: z.string().regex(/^\d{2}:\d{2}$/),
+        time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/),
         weeks: z.number().int().min(1).max(8).optional(),
       })
       .parse(req.body);
-    const [hour, minute] = body.time.split(":").map(Number);
+    const [hour, minute] = body.time.slice(0, 5).split(":").map(Number);
     const [year, month, day] = body.date.split("-").map(Number);
     const first = athensInstant(year, month, day, hour, minute);
     const truck = await prisma.truck.findUnique({ where: { id: body.truckId } });
@@ -299,17 +299,24 @@ adminRouter.patch(
         truckId: z.string().optional(),
         driverId: z.string().optional(),
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-        time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+        time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
       })
       .parse(req.body);
-    const shift = await prisma.shift.findUnique({ where: { id: String(req.params.id) } });
+    const shift = await prisma.shift.findUnique({ where: { id: String(req.params.id) }, include: { bookings: true } });
     if (!shift || shift.status !== "SCHEDULED") throw new HttpError(409, "SHIFT_STARTED");
     let startsAt = shift.startsAt;
     if (body.date && body.time) {
-      const [hour, minute] = body.time.split(":").map(Number);
+      const [hour, minute] = body.time.slice(0, 5).split(":").map(Number);
       const [year, month, day] = body.date.split("-").map(Number);
       startsAt = athensInstant(year, month, day, hour, minute);
     }
+    const endsAt = shiftEndsAt(startsAt);
+    const misplaced = shift.bookings.some(
+      (booking) =>
+        booking.status === "CONFIRMED" &&
+        (booking.scheduledAt < startsAt || booking.scheduledAt.getTime() + 15 * 60_000 > endsAt.getTime()),
+    );
+    if (misplaced) throw new HttpError(409, "SHIFT_HAS_BOOKINGS");
     const updated = await prisma.shift.update({
       where: { id: shift.id },
       data: {
@@ -327,8 +334,9 @@ adminRouter.delete(
   "/admin/shifts/:id",
   requireAuth("ADMIN"),
   wrap(async (req, res) => {
-    const shift = await prisma.shift.findUnique({ where: { id: String(req.params.id) } });
+    const shift = await prisma.shift.findUnique({ where: { id: String(req.params.id) }, include: { bookings: true } });
     if (!shift || shift.status !== "SCHEDULED") throw new HttpError(409, "SHIFT_STARTED");
+    if (shift.bookings.some((booking) => booking.status === "CONFIRMED")) throw new HttpError(409, "SHIFT_HAS_BOOKINGS");
     await prisma.booking.deleteMany({ where: { shiftId: shift.id } });
     await prisma.slotClosure.deleteMany({ where: { shiftId: shift.id } });
     await prisma.shift.delete({ where: { id: shift.id } });

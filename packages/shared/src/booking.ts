@@ -9,7 +9,7 @@ export const SERVICE_MINUTES = 15;
 export const FLEX_MINUTES = 30;
 export const SLOT_MINUTES = 30;
 export const CANCEL_CUTOFF_MINUTES = 15;
-export const HORIZON_DAYS = 7;
+export const HORIZON_DAYS = 28;
 export const SHIFT_HOURS = 6;
 export const DEFAULT_OVERFLOW_KG = 75;
 
@@ -178,6 +178,22 @@ export function slotInstants(startsAt: Date, endsAt: Date): Date[] {
     out.push(new Date(t));
   }
   return out;
+}
+
+/** Future slots of a shift, including later today after the shift has already started. */
+export function openSlotInstants(startsAt: Date, endsAt: Date, now: Date, horizonDays = HORIZON_DAYS): Date[] {
+  const until = now.getTime() + horizonDays * 24 * 60 * 60_000;
+  return slotInstants(startsAt, endsAt).filter((instant) => instant.getTime() > now.getTime() && instant.getTime() <= until);
+}
+
+export function isSameConfirmedSlot(
+  existing: { binType: string; scheduledAt: string; status: string }[],
+  binType: string,
+  scheduledAt: string,
+): boolean {
+  return existing.some(
+    (booking) => booking.status === "CONFIRMED" && booking.binType === binType && booking.scheduledAt === scheduledAt,
+  );
 }
 
 export function suggestSlot(bookable: string[], nearbyTimes: string[]): string | null {

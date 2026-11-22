@@ -6,6 +6,10 @@ Appointment booking for commercial waste pickup in a Greek municipality. A shop 
 
 Maps are OpenStreetMap, Nominatim, and OSRM. No Google key.
 
+The sign-in photo is the Acropolis from the Areopagus, by Ggia, [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:20101024_Acropolis_panoramic_view_from_Areopagus_hill_Athens_Greece.jpg), CC BY-SA 3.0.
+
+Δημοσίευση στο Render και APK: δες το [DEPLOY.md](DEPLOY.md).
+
 Demo data is for **Δήμος Αθηναίων**. Every demo account uses the password `demo1234`.
 
 | Username | Role |

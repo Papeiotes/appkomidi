@@ -3,9 +3,10 @@
 import { t, type MessageKey } from "@vardia/shared";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ErrorNote } from "@/components/shell";
 import { ChoiceGrid, Wizard } from "@/components/wizard";
 import { Input } from "@/components/ui/input";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 const weeks = [1, 2, 4];
@@ -19,6 +20,7 @@ export default function NewShiftPage() {
   const [truckId, setTruckId] = useState("");
   const [driverId, setDriverId] = useState("");
   const [repeat, setRepeat] = useState("1");
+  const [error, setError] = useState<string | null>(null);
   const [trucks, setTrucks] = useState<{ id: string; plate: string; binType: string }[]>([]);
   const [drivers, setDrivers] = useState<{ id: string; name: string; role: string }[]>([]);
   useEffect(() => {
@@ -38,7 +40,10 @@ export default function NewShiftPage() {
       onNext={() => {
         if (step < 5) setStep(step + 1);
         else {
-          void api("/admin/shifts", { method: "POST", body: JSON.stringify({ truckId, driverId, date, time, weeks: Number(repeat) }) }, token).then(() => router.push("/admin/shifts"));
+          setError(null);
+          void api("/admin/shifts", { method: "POST", body: JSON.stringify({ truckId, driverId, date, time: time.slice(0, 5), weeks: Number(repeat) }) }, token)
+            .then(() => router.push("/admin/shifts"))
+            .catch((caught) => setError(caught instanceof ApiError ? caught.code : "REQUEST_FAILED"));
         }
       }}
     >
@@ -47,7 +52,13 @@ export default function NewShiftPage() {
       {step === 2 ? <ChoiceGrid value={truckId} onChange={setTruckId} options={trucks.map((truck) => ({ id: truck.id, label: `${truck.plate} · ${t(locale, `bin_${truck.binType}` as MessageKey)}` }))} /> : null}
       {step === 3 ? <ChoiceGrid value={driverId} onChange={setDriverId} options={drivers.map((driver) => ({ id: driver.id, label: driver.name }))} /> : null}
       {step === 4 ? <ChoiceGrid value={repeat} onChange={setRepeat} options={weeks.map((count) => ({ id: String(count), label: String(count) }))} /> : null}
-      {step === 5 ? <p className="text-lg">{date} {time} · ×{repeat}</p> : null}
+      {step === 5 ? (
+        <div className="grid gap-2">
+          <p className="text-lg">{date} {time.slice(0, 5)} · ×{repeat}</p>
+          <p className="text-sm text-muted-foreground">{t(locale, "horizonHint")}</p>
+          <ErrorNote code={error} locale={locale} />
+        </div>
+      ) : null}
     </Wizard>
   );
 }

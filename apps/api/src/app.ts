@@ -1,5 +1,6 @@
 import cors from "cors";
 import express from "express";
+import { env } from "./env";
 import { errorHandler, wrap } from "./http";
 import { prisma } from "./prisma";
 import { accountRouter } from "./routes/account";
@@ -12,7 +13,8 @@ import { officeRouter } from "./routes/office";
 
 export function createApp() {
   const app = express();
-  app.use(cors({ origin: true, credentials: true }));
+  app.set("trust proxy", 1);
+  app.use(cors({ origin: env.corsOrigins.length ? env.corsOrigins : true, credentials: true }));
   app.use(express.json({ limit: "1mb" }));
   app.get(
     "/health",

@@ -1,13 +1,13 @@
 "use client";
 
-import { athensDateKey, athensDatePlus, formatWhen, t, type MessageKey } from "@vardia/shared";
+import { HORIZON_DAYS, athensDateKey, athensDatePlus, formatWhen, t, type MessageKey } from "@vardia/shared";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MonthCalendar } from "@/components/month-calendar";
-import { Shell } from "@/components/shell";
+import { ErrorNote, Shell } from "@/components/shell";
 import { TimeGrid, type TimeSlot } from "@/components/time-grid";
 import { ChoiceGrid, Wizard, binColor } from "@/components/wizard";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 const bins = ["GREEN", "BLUE", "YELLOW", "BROWN"] as const;
@@ -24,10 +24,20 @@ export default function BookWizard() {
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [suggested, setSuggested] = useState<string | null>(null);
   const [days, setDays] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    const now = new Date();
-    setDays(Array.from({ length: 7 }, (_, index) => athensDatePlus(index, now)));
-  }, []);
+    if (!token || picked.length === 0) return;
+    const horizon = Array.from({ length: HORIZON_DAYS }, (_, index) => athensDatePlus(index, new Date()));
+    Promise.all(picked.map((item) => api<{ slots: TimeSlot[] }>(`/slots?binType=${item}`, {}, token)))
+      .then((bodies) => {
+        const sets = bodies.map((body) => new Set(body.slots.map((slot) => athensDateKey(new Date(slot.at)))));
+        const [first, ...rest] = sets;
+        const open = horizon.filter((item) => Boolean(first?.has(item) && rest.every((set) => set.has(item))));
+        setDays(open);
+        setDay((current) => (open.includes(current) ? current : ""));
+      })
+      .catch((caught) => setError(caught instanceof ApiError ? caught.code : "REQUEST_FAILED"));
+  }, [token, picked]);
   const total = 2 + picked.length * 2 + 1;
   const afterDay = step - 2;
   const binPair = Math.floor(afterDay / 2);
@@ -64,22 +74,34 @@ export default function BookWizard() {
         canNext={phase === "bin" ? picked.length > 0 : phase === "day" ? Boolean(day) : phase === "kg" ? Boolean(bracketsByBin[bin]) : phase === "time" ? Boolean(times[bin]) : true}
         nextLabel={phase === "review" ? t(locale, "book") : undefined}
         onNext={() => {
-          if (phase !== "review") setStep(step + 1);
-          else {
-            void api(
-              "/bookings",
-              {
-                method: "POST",
-                body: JSON.stringify({
-                  items: picked.map((item) => ({ binType: item, bracket: bracketsByBin[item], scheduledAt: times[item] })),
-                }),
-              },
-              token,
-            ).then(() => router.push("/business"));
+          if (phase !== "review") {
+            setError(null);
+            setStep(step + 1);
+            return;
           }
+          void api<{ results: { ok: boolean; code?: string }[] }>(
+            "/bookings",
+            {
+              method: "POST",
+              body: JSON.stringify({
+                items: picked.map((item) => ({ binType: item, bracket: bracketsByBin[item], scheduledAt: times[item] })),
+              }),
+            },
+            token,
+          )
+            .then((body) => {
+              const failed = body.results.find((result) => !result.ok);
+              if (failed) {
+                setError(failed.code ?? "REQUEST_FAILED");
+                return;
+              }
+              router.push("/business");
+            })
+            .catch((caught) => setError(caught instanceof ApiError ? caught.code : "REQUEST_FAILED"));
         }}
       >
         <div key={step} className="step-in">
+          <ErrorNote code={error} locale={locale} />
           {phase === "bin" ? (
             <ChoiceGrid
               multiple
@@ -88,7 +110,9 @@ export default function BookWizard() {
               options={bins.map((item) => ({ id: item, label: t(locale, `bin_${item}` as MessageKey), color: binColor[item] }))}
             />
           ) : null}
-          {phase === "day" ? <MonthCalendar days={days} value={day} onChange={setDay} locale={locale} /> : null}
+          {phase === "day" ? (
+            days.length ? <MonthCalendar days={days} value={day} onChange={setDay} locale={locale} /> : <p className="text-base text-muted-foreground">{t(locale, "noShiftDay")}</p>
+          ) : null}
           {phase === "kg" ? (
             <ChoiceGrid
               value={bracketsByBin[bin] ?? ""}
@@ -98,7 +122,11 @@ export default function BookWizard() {
           ) : null}
           {phase === "time" ? (
             <div>
-              <TimeGrid slots={slots} suggested={suggested} value={times[bin] ?? ""} onChange={(at) => setTimes({ ...times, [bin]: at })} locale={locale} />
+              {slots.length === 0 ? <p className="text-base text-muted-foreground">{t(locale, "noShiftDay")}</p> : slots.some((slot) => slot.bookable) ? (
+                <TimeGrid slots={slots} suggested={suggested} value={times[bin] ?? ""} onChange={(at) => setTimes({ ...times, [bin]: at })} locale={locale} />
+              ) : (
+                <p className="text-base text-muted-foreground">{t(locale, "noRoom")}</p>
+              )}
               <p className="mt-4 text-sm text-muted-foreground">{t(locale, "disclaimer")}</p>
             </div>
           ) : null}

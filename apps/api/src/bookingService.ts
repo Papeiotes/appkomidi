@@ -2,6 +2,7 @@ import {
   BookingError,
   assignUnderLock,
   evaluateCancel,
+  isSameConfirmedSlot,
   kgForBracket,
   optimizeRoute,
   type BinType,
@@ -64,6 +65,13 @@ export async function createBooking(input: {
   return prisma.$transaction(async (tx) => {
     const business = await tx.business.findUnique({ where: { id: input.businessId } });
     if (!business || business.status !== "APPROVED") throw new BookingError("NOT_APPROVED");
+    const prior = await tx.booking.findMany({
+      where: { businessId: business.id, status: "CONFIRMED" },
+      select: { binType: true, scheduledAt: true, status: true },
+    });
+    if (isSameConfirmedSlot(prior.map((row) => ({ ...row, scheduledAt: row.scheduledAt.toISOString() })), input.binType, input.scheduledAt.toISOString())) {
+      throw new BookingError("DUPLICATE_BOOKING");
+    }
     const result = await assignUnderLock({
       lockShifts: () => lockCompatible(tx, business.municipalityId, input.binType, input.scheduledAt),
       load: () => loadCompatible(tx, business.municipalityId, input.binType, input.scheduledAt),

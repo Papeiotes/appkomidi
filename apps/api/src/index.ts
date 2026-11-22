@@ -9,7 +9,9 @@ async function main() {
   await seed();
   const app = createApp();
   const server = createServer(app);
-  const io = new Server(server, { cors: { origin: true, credentials: true } });
+  const io = new Server(server, {
+    cors: { origin: env.corsOrigins.length ? env.corsOrigins : true, credentials: true },
+  });
   app.set("io", io);
   attachSocket(io);
   server.listen(env.port, "0.0.0.0", () => {
