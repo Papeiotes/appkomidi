@@ -71,6 +71,7 @@ model User {
   municipalityId String
   municipality   Municipality @relation(fields: [municipalityId], references: [id])
   permissions    String[]     @default([])
+  pushToken      String?
   business       Business?
   driverShifts   Shift[]      @relation("ShiftDriver")
   linkedTrucks   Truck[]      @relation("DriverTruck")
@@ -176,6 +177,8 @@ model Booking {
   status         BookingStatus    @default(CONFIRMED)
   arrivalOpen    Boolean          @default(false)
   arrivalNotified Boolean         @default(false)
+  reminderSent   Boolean          @default(false)
+  cancelReason   String?
   completedAt    DateTime?
   createdAt      DateTime         @default(now())
 

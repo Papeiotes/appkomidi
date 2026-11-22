@@ -1,4 +1,4 @@
-import { HORIZON_DAYS, kgForBracket, openSlotInstants, optimizeRoute, rankSlots, type BinType, type QuantityBracket } from "@vardia/shared";
+import { HORIZON_DAYS, athensDateKey, kgForBracket, openSlotInstants, optimizeRoute, rankSlots, type BinType, type QuantityBracket } from "@vardia/shared";
 import { Router } from "express";
 import type { Server } from "socket.io";
 import { z } from "zod";
@@ -38,8 +38,10 @@ bookingsRouter.get(
     if (!business || business.status !== "APPROVED") throw new HttpError(403, "NOT_APPROVED");
     const type = bin(String(req.query.binType ?? "GREEN"));
     const bracketQuery = String(req.query.bracket ?? "");
-    const needed =
-      bracketQuery === "KG_0_10" || bracketQuery === "KG_10_20" || bracketQuery === "KG_20_50" || bracketQuery === "KG_50_PLUS"
+    const kgQuery = Number(req.query.kg);
+    const needed = Number.isInteger(kgQuery) && kgQuery > 0
+      ? kgQuery
+      : bracketQuery === "KG_0_10" || bracketQuery === "KG_10_20" || bracketQuery === "KG_20_50" || bracketQuery === "KG_50_PLUS"
         ? kgForBracket(bracketQuery, env.overflowKg)
         : 1;
     const now = new Date();
@@ -121,7 +123,8 @@ bookingsRouter.post(
           .array(
             z.object({
               binType: z.enum(["GREEN", "BLUE", "YELLOW", "BROWN"]),
-              bracket: z.enum(["KG_0_10", "KG_10_20", "KG_20_50", "KG_50_PLUS"]),
+              bracket: z.enum(["KG_0_10", "KG_10_20", "KG_20_50", "KG_50_PLUS"]).optional(),
+              kg: z.number().int().min(1).max(2000).optional(),
               scheduledAt: z.string(),
             }),
           )
@@ -135,10 +138,13 @@ bookingsRouter.post(
     for (const item of body.items) {
       const scheduledAt = new Date(item.scheduledAt);
       try {
+        const kg = item.kg ?? (item.bracket ? kgForBracket(item.bracket as QuantityBracket, env.overflowKg) : 0);
+        if (!kg) throw new Error("INVALID_KG");
         const booked = await createBooking({
           businessId,
           binType: item.binType,
-          bracket: item.bracket as QuantityBracket,
+          bracket: (item.bracket ?? (kg <= 10 ? "KG_0_10" : kg <= 20 ? "KG_10_20" : kg <= 50 ? "KG_20_50" : "KG_50_PLUS")) as QuantityBracket,
+          kg,
           scheduledAt,
         });
         const io = req.app.get("io") as Server | undefined;
@@ -147,8 +153,8 @@ bookingsRouter.post(
           type: "BOOKING_CONFIRMED",
           titleEl: "Το ραντεβού κλείστηκε",
           titleEn: "Pickup booked",
-          bodyEl: `${item.binType} · ${kgForBracket(item.bracket, env.overflowKg)} kg`,
-          bodyEn: `${item.binType} · ${kgForBracket(item.bracket, env.overflowKg)} kg`,
+          bodyEl: `${item.binType} · ${kg} kg`,
+          bodyEn: `${item.binType} · ${kg} kg`,
           data: { bookingId: booked.booking.id },
         });
         results.push({ ok: true, booking: booked.booking });
@@ -192,6 +198,18 @@ bookingsRouter.post(
   requireAuth("BUSINESS"),
   wrap(async (req, res) => {
     const booking = await cancelBooking({ bookingId: String(req.params.id), businessId: businessIdOf(req) ?? "" });
+    const business = await prisma.business.findUnique({ where: { id: booking.businessId } });
+    if (business) {
+      await notify(req.app.get("io") as Server | undefined, {
+        userId: business.userId,
+        type: "BOOKING_CANCELLED",
+        titleEl: "Το ραντεβού ακυρώθηκε",
+        titleEn: "Pickup cancelled",
+        bodyEl: "Η κράτηση ακυρώθηκε.",
+        bodyEn: "The pickup was cancelled.",
+        data: { bookingId: booking.id },
+      });
+    }
     res.json({ booking });
   }),
 );
@@ -219,6 +237,11 @@ bookingsRouter.get(
       include: { shift: true, business: true },
     });
     if (!booking) throw new HttpError(404, "NOT_FOUND");
+    const liveToday =
+      booking.status === "CONFIRMED" &&
+      athensDateKey(booking.scheduledAt) === athensDateKey(new Date()) &&
+      (booking.shift.status === "IN_PROGRESS" || booking.shift.status === "PAUSED");
+    if (!liveToday) throw new HttpError(409, "NOT_LIVE");
     const { previewEta } = await import("../tracking");
     const preview = await previewEta(booking.shiftId, booking.id);
     res.json({

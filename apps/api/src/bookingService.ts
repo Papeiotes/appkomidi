@@ -57,11 +57,12 @@ export async function createBooking(input: {
   businessId: string;
   binType: BinType;
   bracket: QuantityBracket;
+  kg?: number;
   scheduledAt: Date;
   now?: Date;
 }) {
   const now = input.now ?? new Date();
-  const requestedKg = kgForBracket(input.bracket, env.overflowKg);
+  const requestedKg = input.kg && input.kg > 0 ? input.kg : kgForBracket(input.bracket, env.overflowKg);
   return prisma.$transaction(async (tx) => {
     const business = await tx.business.findUnique({ where: { id: input.businessId } });
     if (!business || business.status !== "APPROVED") throw new BookingError("NOT_APPROVED");

@@ -11,20 +11,35 @@ import { ApiError, api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 const bins = ["GREEN", "BLUE", "YELLOW", "BROWN"] as const;
-const brackets = ["KG_0_10", "KG_10_20", "KG_20_50", "KG_50_PLUS"] as const;
+
+function kilosOf(value: string) {
+  const kilos = Number(value);
+  return Number.isInteger(kilos) && kilos >= 1 && kilos <= 2000 ? kilos : 0;
+}
 
 export default function BookWizard() {
   const { locale, token } = useAuth();
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [picked, setPicked] = useState<string[]>([]);
-  const [bracketsByBin, setBracketsByBin] = useState<Record<string, string>>({});
+  const [kgByBin, setKgByBin] = useState<Record<string, string>>({});
+  const [lastKg, setLastKg] = useState<Record<string, number>>({});
   const [day, setDay] = useState("");
   const [times, setTimes] = useState<Record<string, string>>({});
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [suggested, setSuggested] = useState<string | null>(null);
   const [days, setDays] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!token) return;
+    api<{ bookings: { binType: string; kg: number }[] }>("/bookings/mine", {}, token)
+      .then((body) => {
+        const next: Record<string, number> = {};
+        for (const row of body.bookings) if (next[row.binType] == null) next[row.binType] = row.kg;
+        setLastKg(next);
+      })
+      .catch(() => undefined);
+  }, [token]);
   useEffect(() => {
     if (!token || picked.length === 0) return;
     const horizon = Array.from({ length: HORIZON_DAYS }, (_, index) => athensDatePlus(index, new Date()));
@@ -45,12 +60,16 @@ export default function BookWizard() {
   const bin = picked[binPair] ?? "";
 
   useEffect(() => {
-    if (phase !== "time" || !bin || !token || !day || !bracketsByBin[bin]) return;
-    api<{ slots: TimeSlot[]; suggested: string | null }>(`/slots?binType=${bin}&bracket=${bracketsByBin[bin]}`, {}, token).then((body) => {
+    if (phase !== "time" || !bin || !token || !day || !kilosOf(kgByBin[bin] ?? "")) return;
+    api<{ slots: TimeSlot[]; suggested: string | null }>(`/slots?binType=${bin}&kg=${kgByBin[bin]}`, {}, token).then((body) => {
       setSlots(body.slots.filter((slot) => athensDateKey(new Date(slot.at)) === day));
       setSuggested(body.suggested && athensDateKey(new Date(body.suggested)) === day ? body.suggested : null);
     });
-  }, [phase, bin, token, day, bracketsByBin]);
+  }, [phase, bin, token, day, kgByBin]);
+  useEffect(() => {
+    if (phase !== "kg" || !bin || kgByBin[bin] || !lastKg[bin]) return;
+    setKgByBin((current) => ({ ...current, [bin]: String(lastKg[bin]) }));
+  }, [phase, bin, lastKg, kgByBin]);
 
   const title =
     phase === "bin"
@@ -71,7 +90,7 @@ export default function BookWizard() {
         title={title}
         wide={phase === "time"}
         onBack={step ? () => setStep(step - 1) : undefined}
-        canNext={phase === "bin" ? picked.length > 0 : phase === "day" ? Boolean(day) : phase === "kg" ? Boolean(bracketsByBin[bin]) : phase === "time" ? Boolean(times[bin]) : true}
+        canNext={phase === "bin" ? picked.length > 0 : phase === "day" ? Boolean(day) : phase === "kg" ? Boolean(kilosOf(kgByBin[bin] ?? "")) : phase === "time" ? Boolean(times[bin]) : true}
         nextLabel={phase === "review" ? t(locale, "book") : undefined}
         onNext={() => {
           if (phase !== "review") {
@@ -84,7 +103,7 @@ export default function BookWizard() {
             {
               method: "POST",
               body: JSON.stringify({
-                items: picked.map((item) => ({ binType: item, bracket: bracketsByBin[item], scheduledAt: times[item] })),
+                items: picked.map((item) => ({ binType: item, kg: kilosOf(kgByBin[item] ?? ""), scheduledAt: times[item] })),
               }),
             },
             token,
@@ -114,11 +133,20 @@ export default function BookWizard() {
             days.length ? <MonthCalendar days={days} value={day} onChange={setDay} locale={locale} /> : <p className="text-base text-muted-foreground">{t(locale, "noShiftDay")}</p>
           ) : null}
           {phase === "kg" ? (
-            <ChoiceGrid
-              value={bracketsByBin[bin] ?? ""}
-              onChange={(id) => setBracketsByBin((current) => ({ ...current, [bin]: id }))}
-              options={brackets.map((item) => ({ id: item, label: t(locale, `bracket_${item}` as MessageKey) }))}
-            />
+            <div>
+              <p className="text-muted-foreground">{t(locale, "typeKg")}</p>
+              {lastKg[bin] ? (
+                <button type="button" className="mt-3 inline-flex h-11 items-center rounded-full border border-primary px-4 text-primary" onClick={() => setKgByBin((current) => ({ ...current, [bin]: String(lastKg[bin]) }))}>
+                  {t(locale, "lastKg")} · {lastKg[bin]} kg
+                </button>
+              ) : null}
+              <input
+                inputMode="numeric"
+                className="mt-4 h-16 w-full rounded-2xl border border-border px-4 text-2xl"
+                value={kgByBin[bin] ?? ""}
+                onChange={(event) => setKgByBin((current) => ({ ...current, [bin]: event.target.value.replace(/[^0-9]/g, "") }))}
+              />
+            </div>
           ) : null}
           {phase === "time" ? (
             <div>
@@ -138,7 +166,7 @@ export default function BookWizard() {
                     <span className="h-4 w-4 rounded-full" style={{ background: binColor[item] }} />
                     <p className="text-lg font-medium">{t(locale, `bin_${item}` as MessageKey)}</p>
                   </div>
-                  <p className="mt-2">{t(locale, `bracket_${bracketsByBin[item]}` as MessageKey)}</p>
+                  <p className="mt-2">{kgByBin[item]} kg</p>
                   <p className="text-muted-foreground">{times[item] ? formatWhen(times[item], locale) : ""}</p>
                 </li>
               ))}

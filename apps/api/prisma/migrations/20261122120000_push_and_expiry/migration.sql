@@ -1,0 +1,3 @@
+ALTER TABLE "User" ADD COLUMN "pushToken" TEXT;
+ALTER TABLE "Booking" ADD COLUMN "reminderSent" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Booking" ADD COLUMN "cancelReason" TEXT;
