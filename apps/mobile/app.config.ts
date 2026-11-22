@@ -4,6 +4,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: "APPkomidi",
   slug: "appkomidi",
+  owner: "papeiotess-team",
   scheme: "appkomidi",
   android: {
     ...config.android,

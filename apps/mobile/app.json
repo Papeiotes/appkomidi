@@ -20,7 +20,10 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -36,7 +39,15 @@
       ]
     ],
     "extra": {
-      "apiUrl": "http://localhost:4107"
+      "apiUrl": "https://appkomidi-api-production.up.railway.app",
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "f46edb51-90f7-4a98-be75-4e9b8ed8bce6"
+      }
     }
   }
 }
