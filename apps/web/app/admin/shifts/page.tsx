@@ -16,15 +16,19 @@ export default function ShiftsPage() {
   const [copyId, setCopyId] = useState("");
   const [dates, setDates] = useState<string[]>([]);
   const [step, setStep] = useState(0);
+  const [upcoming, setUpcoming] = useState<string[]>([]);
+  useEffect(() => {
+    const now = new Date();
+    setUpcoming(Array.from({ length: 7 }, (_, index) => athensDatePlus(index + 1, now)));
+  }, []);
   useEffect(() => {
     if (token) api<{ shifts: Shift[] }>("/admin/shifts", {}, token).then((body) => setShifts(body.shifts));
   }, [token]);
-  const upcoming = Array.from({ length: 7 }, (_, index) => athensDatePlus(index + 1));
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-semibold">{t(locale, "navShifts")}</h1>
-        <Button className="h-12" render={<Link href="/admin/shifts/new" />}>{t(locale, "newShift")}</Button>
+        <Link href="/admin/shifts/new" className="inline-flex h-12 min-h-11 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-white">{t(locale, "newShift")}</Link>
       </div>
       <ul className="mt-6 grid gap-3">
         {shifts.map((shift) => (

@@ -92,78 +92,82 @@ export default function DrivePage() {
   }
 
   return (
-    <div className="relative h-screen bg-white">
-      <LiveMap
-        className="h-full w-full"
-        driver={here}
-        line={line}
-        stops={confirmed.map((stop) => ({ id: stop.id, lat: stop.lat, lng: stop.lng, label: stop.business, active: stop.id === next?.id }))}
-      />
-      <button type="button" className="absolute top-4 left-4 z-[500] rounded-full bg-white px-4 py-2 text-sm shadow" onClick={() => { auth.logout(); window.location.assign("/"); }}>
-        {t(locale, "logout")}
-      </button>
-      {error ? <p className="absolute top-4 right-4 z-[500] max-w-xs rounded-xl bg-white px-3 py-2 text-sm text-destructive shadow">{error}</p> : null}
-
-      {shift?.status === "SCHEDULED" ? (
-        <button
-          type="button"
-          disabled={busy}
-          className="absolute bottom-8 left-1/2 z-[500] h-20 w-[min(92%,24rem)] -translate-x-1/2 rounded-full bg-primary text-2xl font-semibold tracking-wide text-white shadow-lg disabled:opacity-70"
-          onClick={() => {
-            setBusy(true);
-            void hereNow().then((point) => act("start", JSON.stringify(point)));
-          }}
-        >
-          {t(locale, "startShift")}
+    <div className="relative h-dvh overflow-hidden bg-white">
+      <div className="absolute inset-0 z-0">
+        <LiveMap
+          className="h-full w-full"
+          driver={here}
+          line={line}
+          stops={confirmed.map((stop) => ({ id: stop.id, lat: stop.lat, lng: stop.lng, label: stop.business, active: stop.id === next?.id }))}
+        />
+      </div>
+      <div className="pointer-events-none absolute inset-0 z-[1000]">
+        <button type="button" className="pointer-events-auto absolute top-3 left-3 inline-flex h-11 min-h-11 items-center rounded-full bg-white px-4 text-sm shadow" onClick={() => { auth.logout(); window.location.assign("/"); }}>
+          {t(locale, "logout")}
         </button>
-      ) : null}
+        {error ? <p className="pointer-events-auto absolute top-3 right-3 max-w-[70%] rounded-xl bg-white px-3 py-2 text-sm text-destructive shadow">{error}</p> : null}
 
-      {next && (shift?.status === "IN_PROGRESS" || shift?.status === "PAUSED") ? (
-        <div className="absolute right-3 bottom-3 left-3 z-[500] rounded-3xl bg-white p-5 shadow-xl">
-          <p className="text-xs font-medium tracking-wide text-primary uppercase">{t(locale, "nextStop")}</p>
-          <div className="mt-2 flex items-center gap-3">
-            <span className="h-4 w-4 rounded-full" style={{ background: binColor[next.binType] }} />
-            <p className="text-xl font-semibold">{next.business}</p>
+        {shift?.status === "SCHEDULED" ? (
+          <button
+            type="button"
+            disabled={busy}
+            className="pointer-events-auto absolute inset-x-4 bottom-4 inline-flex h-16 min-h-16 items-center justify-center rounded-full bg-primary text-2xl font-semibold tracking-wide text-white shadow-lg disabled:opacity-70 sm:inset-x-auto sm:left-1/2 sm:w-[24rem] sm:-translate-x-1/2"
+            onClick={() => {
+              setBusy(true);
+              void hereNow().then((point) => act("start", JSON.stringify(point)));
+            }}
+          >
+            {t(locale, "startShift")}
+          </button>
+        ) : null}
+
+        {next && (shift?.status === "IN_PROGRESS" || shift?.status === "PAUSED") ? (
+          <div className="pointer-events-auto absolute inset-x-2 bottom-2 max-h-[62dvh] overflow-y-auto rounded-3xl bg-white p-4 shadow-xl sm:inset-x-4 sm:p-5">
+            <p className="text-xs font-medium tracking-wide text-primary uppercase">{t(locale, "nextStop")}</p>
+            <div className="mt-2 flex items-center gap-3">
+              <span className="h-4 w-4 shrink-0 rounded-full" style={{ background: binColor[next.binType] }} />
+              <p className="text-xl font-semibold">{next.business}</p>
+            </div>
+            <p className="mt-2 text-muted-foreground">{next.label}</p>
+            <p className="mt-1">{t(locale, `bin_${next.binType}` as MessageKey)} · {t(locale, `bracket_${next.bracket}` as MessageKey)}</p>
+            <p className="mt-1">{t(locale, "windowLabel")}: {formatWhen(next.scheduledAt, locale)} ±15</p>
+            <p>{t(locale, "eta")}: {data?.eta ? formatWhen(data.eta, locale) : "—"}</p>
+            <p>{t(locale, "phone")}: {next.phone}</p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={busy}
+                className="inline-flex h-14 min-h-11 w-full items-center justify-center rounded-2xl border border-primary text-base font-semibold text-primary"
+                onClick={() => void act(shift.status === "PAUSED" ? "resume" : "pause")}
+              >
+                {shift.status === "PAUSED" ? t(locale, "resume") : t(locale, "pause")}
+              </button>
+              <button
+                type="button"
+                disabled={busy || shift.status !== "IN_PROGRESS"}
+                className="inline-flex h-14 min-h-11 w-full items-center justify-center rounded-2xl bg-primary text-base font-semibold text-white disabled:opacity-50"
+                onClick={() => void act("complete")}
+              >
+                {t(locale, "completeStop")}
+              </button>
+            </div>
           </div>
-          <p className="mt-2 text-muted-foreground">{next.label}</p>
-          <p className="mt-1">{t(locale, `bin_${next.binType}` as MessageKey)} · {t(locale, `bracket_${next.bracket}` as MessageKey)}</p>
-          <p className="mt-1">{t(locale, "windowLabel")}: {formatWhen(next.scheduledAt, locale)} ±15</p>
-          <p>{t(locale, "eta")}: {data?.eta ? formatWhen(data.eta, locale) : "—"}</p>
-          <p>{t(locale, "phone")}: {next.phone}</p>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              disabled={busy}
-              className="h-14 rounded-2xl border border-primary text-base font-semibold text-primary"
-              onClick={() => void act(shift.status === "PAUSED" ? "resume" : "pause")}
-            >
-              {shift.status === "PAUSED" ? t(locale, "resume") : t(locale, "pause")}
-            </button>
-            <button
-              type="button"
-              disabled={busy || shift.status !== "IN_PROGRESS"}
-              className="h-14 rounded-2xl bg-primary text-base font-semibold text-white disabled:opacity-50"
-              onClick={() => void act("complete")}
-            >
-              {t(locale, "completeStop")}
-            </button>
+        ) : null}
+
+        {shift?.status === "ENDED" ? (
+          <div className="pointer-events-auto absolute inset-x-2 bottom-2 max-h-[62dvh] overflow-y-auto rounded-3xl bg-white p-4 shadow-xl sm:inset-x-4 sm:p-5">
+            <p className="text-2xl font-semibold">{t(locale, "shiftDone")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t(locale, "stopsDone")}</p>
+            <ul className="mt-3 grid gap-2">
+              {done.map((stop) => (
+                <li key={stop.id} className="text-base">{stop.business}</li>
+              ))}
+            </ul>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {shift?.status === "ENDED" ? (
-        <div className="absolute right-3 bottom-3 left-3 z-[500] rounded-3xl bg-white p-5 shadow-xl">
-          <p className="text-2xl font-semibold">{t(locale, "shiftDone")}</p>
-          <p className="mt-1 text-sm text-muted-foreground">{t(locale, "stopsDone")}</p>
-          <ul className="mt-3 grid gap-2">
-            {done.map((stop) => (
-              <li key={stop.id} className="text-base">{stop.business}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {!shift && data ? <p className="absolute bottom-8 left-1/2 z-[500] -translate-x-1/2 rounded-full bg-white px-5 py-3 shadow">{t(locale, "noShift")}</p> : null}
+        {!shift && data ? <p className="pointer-events-auto absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white px-5 py-3 shadow">{t(locale, "noShift")}</p> : null}
+      </div>
     </div>
   );
 }

@@ -70,7 +70,7 @@ export function MonthCalendar({
                     type="button"
                     disabled={!open}
                     onClick={() => onChange(day)}
-                    className={`h-11 rounded-full text-sm ${selected ? "bg-primary font-semibold text-white" : open ? "text-foreground hover:bg-secondary" : "cursor-default text-muted-foreground/40"}`}
+                    className={`inline-flex h-11 min-h-11 items-center justify-center rounded-full text-base ${selected ? "bg-primary font-semibold text-white" : open ? "text-foreground hover:bg-secondary" : "cursor-default text-muted-foreground/40"}`}
                   >
                     {Number(day.slice(-2))}
                   </button>

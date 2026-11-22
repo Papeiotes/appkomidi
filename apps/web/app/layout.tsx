@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="el" className={`${sans.variable} ${serif.variable} h-full`}>
+    <html lang="el" className={`${sans.variable} ${serif.variable} h-full`} suppressHydrationWarning>
       <head>
         <link
           rel="stylesheet"

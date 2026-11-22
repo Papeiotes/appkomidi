@@ -3,7 +3,6 @@
 import { t } from "@vardia/shared";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -17,7 +16,7 @@ export default function AreasPage() {
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-semibold">{t(locale, "navAreas")}</h1>
-        <Button className="h-12" render={<Link href="/admin/areas/new" />}>{t(locale, "next")}</Button>
+        <Link href="/admin/areas/new" className="inline-flex h-12 min-h-11 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-white">{t(locale, "next")}</Link>
       </div>
       <ul className="mt-6 grid gap-3">
         {areas.map((area) => (

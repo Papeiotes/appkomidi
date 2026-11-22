@@ -61,7 +61,7 @@ export default function RegisterPage() {
           <div className="grid gap-3">
             <Input className="h-14" placeholder={t(locale, "street")} value={street} onChange={(e) => setStreet(e.target.value)} />
             <Input className="h-14" placeholder={t(locale, "streetNumber")} value={number} onChange={(e) => setNumber(e.target.value)} />
-            <button type="button" className="text-left text-primary" onClick={() => void api<{ results: { lat: number; lng: number }[] }>(`/geo/search?q=${encodeURIComponent(`${street} ${number} Αθήνα`)}`).then((body) => { if (body.results[0]) { setLat(body.results[0].lat); setLng(body.results[0].lng); } })}>{t(locale, "searchAddress")}</button>
+            <button type="button" className="inline-flex h-12 min-h-11 items-center text-left text-base text-primary" onClick={() => void api<{ results: { lat: number; lng: number }[] }>(`/geo/search?q=${encodeURIComponent(`${street} ${number} Αθήνα`)}`).then((body) => { if (body.results[0]) { setLat(body.results[0].lat); setLng(body.results[0].lng); } })}>{t(locale, "searchAddress")}</button>
           </div>
         ) : null}
         {step === 5 ? <MapPicker locale={locale} lat={lat} lng={lng} onChange={(next) => { setLat(next.lat); setLng(next.lng); }} /> : null}

@@ -34,9 +34,9 @@ export default function AccountsPage() {
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-semibold">{t(locale, "navAccounts")}</h1>
-        <Button className="h-12" render={<Link href="/admin/accounts/new" />}>
+        <Link href="/admin/accounts/new" className="inline-flex h-12 min-h-11 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-white">
           {t(locale, "addAccount")}
-        </Button>
+        </Link>
       </div>
       <ul className="mt-6 grid gap-3">
         {users.map((user) => (

@@ -24,7 +24,7 @@ export default function LoginScreen() {
       <View style={styles.pad}>
         <View style={styles.row}>
           <Text style={[styles.title, { color: colors.olive }]}>{t(locale, "brand")}</Text>
-          <Pressable onPress={() => session.setLocale(locale === "el" ? "en" : "el")}>
+          <Pressable hitSlop={12} style={{ minHeight: 44, minWidth: 44, alignItems: "center", justifyContent: "center" }} onPress={() => session.setLocale(locale === "el" ? "en" : "el")}>
             <Text>{locale === "el" ? "EN" : "ΕΛ"}</Text>
           </Pressable>
         </View>
@@ -35,6 +35,7 @@ export default function LoginScreen() {
         <TextInput style={styles.input} autoCapitalize="none" value={session.apiUrl} onChangeText={session.setApiUrl} />
         <Text style={styles.muted}>{t(locale, "apiUrlHint")}</Text>
         <Pressable
+          hitSlop={8}
           style={styles.button}
           onPress={async () => {
             setError(null);
@@ -51,7 +52,7 @@ export default function LoginScreen() {
         >
           <Text style={styles.buttonText}>{t(locale, "signIn")}</Text>
         </Pressable>
-        <Link href="/register" style={{ color: colors.olive }}>
+        <Link href="/register" style={{ color: colors.olive, minHeight: 44, textAlign: "center", paddingVertical: 12 }}>
           {t(locale, "ctaRegister")}
         </Link>
         <Text style={styles.muted}>{t(locale, "demoHint")}</Text>

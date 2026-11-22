@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { binColor } from "@/components/wizard";
 import { Shell } from "@/components/shell";
-import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { useRequire } from "@/lib/auth";
 
@@ -47,9 +46,9 @@ export default function BusinessHome() {
             <p className="mt-2 text-muted-foreground">{t(locale, "pendingBody")}</p>
           </div>
         ) : (
-          <Button className="h-16 w-full rounded-2xl text-lg" render={<Link href="/business/book" />}>
+          <Link href="/business/book" className="inline-flex h-16 min-h-11 w-full items-center justify-center rounded-2xl bg-primary text-lg font-medium text-white">
             {t(locale, "bookCta")}
-          </Button>
+          </Link>
         )}
         {live ? (
           <Link href={`/business/live?id=${live.id}`} className="mt-4 block rounded-3xl border border-primary bg-secondary p-5">

@@ -25,7 +25,7 @@ export function LanguageToggle({ locale, onChange }: { locale: Locale; onChange:
         <button
           key={item}
           type="button"
-          className={`rounded-full px-2.5 py-1 ${locale === item ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+          className={`inline-flex h-11 min-w-11 items-center justify-center rounded-full px-3 ${locale === item ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
           onClick={() => onChange(item)}
         >
           {item === "el" ? "ΕΛ" : "EN"}
@@ -45,8 +45,8 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-white">
       <header className="sticky top-0 z-30 border-b border-border bg-white">
-        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
-          <Link href={auth.user ? homeFor(auth.user.role) : "/"} className="text-lg font-semibold text-primary">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2 px-4 py-2">
+          <Link href={auth.user ? homeFor(auth.user.role) : "/"} className="inline-flex h-11 items-center text-lg font-semibold text-primary">
             {t(locale, "brand")}
           </Link>
           <nav className="hidden gap-1 md:flex">
@@ -54,7 +54,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`rounded-full px-3 py-1.5 text-sm ${pathname === item.href ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                className={`inline-flex h-11 items-center rounded-full px-3 text-sm ${pathname === item.href ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
               >
                 {t(locale, item.key)}
               </Link>
@@ -86,7 +86,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
+      <main className="mx-auto min-w-0 max-w-5xl px-4 py-6">{children}</main>
     </div>
   );
 }

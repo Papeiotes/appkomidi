@@ -27,7 +27,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 10,
     color: colors.ink,
   },
-  button: { backgroundColor: colors.olive, borderRadius: 12, paddingVertical: 12, alignItems: "center" },
+  button: { backgroundColor: colors.olive, borderRadius: 12, minHeight: 48, paddingVertical: 14, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
   buttonText: { color: colors.cream, fontWeight: "600" },
   ghost: { borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingVertical: 10, alignItems: "center", backgroundColor: colors.card },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },

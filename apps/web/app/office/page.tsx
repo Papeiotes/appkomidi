@@ -88,7 +88,7 @@ export default function OfficePage() {
       <ul className="mt-6 grid gap-3">
         {rows.map((row) => (
           <li key={row.id}>
-            <button type="button" className="w-full rounded-2xl border border-border px-4 py-4 text-left" onClick={() => { setSelected(row); setStep(0); setAction(""); }}>
+            <button type="button" className="min-h-16 w-full rounded-2xl border border-border px-4 py-4 text-left" onClick={() => { setSelected(row); setStep(0); setAction(""); }}>
               <p className="text-lg">{row.business.name}</p>
               <p className="text-sm text-muted-foreground">{formatWhen(row.scheduledAt, locale)} · {row.kg} kg · {row.shift.driver.name}</p>
             </button>

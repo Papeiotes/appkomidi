@@ -2,7 +2,6 @@
 
 import { t } from "@vardia/shared";
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 
 export function Wizard({
@@ -14,6 +13,7 @@ export function Wizard({
   onNext,
   nextLabel,
   canNext = true,
+  wide = false,
 }: {
   step: number;
   total: number;
@@ -23,10 +23,11 @@ export function Wizard({
   onNext: () => void;
   nextLabel?: string;
   canNext?: boolean;
+  wide?: boolean;
 }) {
   const { locale } = useAuth();
   return (
-    <div className="mx-auto flex min-h-[70vh] w-full max-w-lg flex-col">
+    <div className={`mx-auto flex min-h-[70vh] w-full max-w-lg flex-col ${wide ? "lg:max-w-3xl" : ""}`}>
       <div className="h-1.5 overflow-hidden rounded-full bg-muted">
         <div className="h-full bg-primary transition-all" style={{ width: `${((step + 1) / total) * 100}%` }} />
       </div>
@@ -37,13 +38,13 @@ export function Wizard({
       <div className="mt-8 flex-1">{children}</div>
       <div className="mt-8 flex gap-3">
         {onBack ? (
-          <Button type="button" variant="outline" className="h-12 px-5" onClick={onBack}>
+          <button type="button" className="inline-flex h-12 min-h-11 items-center justify-center rounded-xl border border-border bg-white px-5 text-base font-medium" onClick={onBack}>
             {t(locale, "back")}
-          </Button>
+          </button>
         ) : null}
-        <Button type="button" className="h-12 flex-1 text-base" disabled={!canNext} onClick={onNext}>
+        <button type="button" className="inline-flex h-12 min-h-11 flex-1 items-center justify-center rounded-xl bg-primary px-5 text-base font-medium text-white disabled:opacity-50" disabled={!canNext} onClick={onNext}>
           {nextLabel ?? t(locale, "next")}
-        </Button>
+        </button>
       </div>
     </div>
   );

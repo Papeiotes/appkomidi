@@ -73,21 +73,22 @@ export default function DriverScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
       <Leaflet ref={mapRef} html={mapHtml} />
-      <Pressable style={{ position: "absolute", top: 48, right: 16, backgroundColor: "#fff", borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 }} onPress={() => setMenu((open) => !open)}>
+      <Pressable hitSlop={12} style={{ position: "absolute", top: 48, right: 16, zIndex: 20, elevation: 20, minHeight: 44, justifyContent: "center", backgroundColor: "#fff", borderRadius: 999, paddingHorizontal: 16 }} onPress={() => setMenu((open) => !open)}>
         <Text>{t(locale, "menu")}</Text>
       </Pressable>
       {menu && shift ? (
         <View style={{ position: "absolute", top: 92, right: 16, backgroundColor: "#fff", borderRadius: 16, padding: 12, gap: 10 }}>
-          {shift.status === "IN_PROGRESS" ? <Pressable onPress={() => void session.api(`/driver/shifts/${shift.id}/pause`, { method: "POST" }).then(load)}><Text>{t(locale, "pause")}</Text></Pressable> : null}
-          {shift.status === "PAUSED" ? <Pressable onPress={() => void session.api(`/driver/shifts/${shift.id}/resume`, { method: "POST" }).then(load)}><Text>{t(locale, "resume")}</Text></Pressable> : null}
-          <Pressable onPress={() => void session.api(`/driver/shifts/${shift.id}/end`, { method: "POST" }).then(load)}><Text>{t(locale, "endShift")}</Text></Pressable>
-          <Pressable onPress={() => session.logout().then(() => router.replace("/"))}><Text>{t(locale, "logout")}</Text></Pressable>
+          {shift.status === "IN_PROGRESS" ? <Pressable hitSlop={8} style={{ minHeight: 44, justifyContent: "center" }} onPress={() => void session.api(`/driver/shifts/${shift.id}/pause`, { method: "POST" }).then(load)}><Text>{t(locale, "pause")}</Text></Pressable> : null}
+          {shift.status === "PAUSED" ? <Pressable hitSlop={8} style={{ minHeight: 44, justifyContent: "center" }} onPress={() => void session.api(`/driver/shifts/${shift.id}/resume`, { method: "POST" }).then(load)}><Text>{t(locale, "resume")}</Text></Pressable> : null}
+          <Pressable hitSlop={8} style={{ minHeight: 44, justifyContent: "center" }} onPress={() => void session.api(`/driver/shifts/${shift.id}/end`, { method: "POST" }).then(load)}><Text>{t(locale, "endShift")}</Text></Pressable>
+          <Pressable hitSlop={8} style={{ minHeight: 44, justifyContent: "center" }} onPress={() => session.logout().then(() => router.replace("/"))}><Text>{t(locale, "logout")}</Text></Pressable>
         </View>
       ) : null}
       {error ? <Text style={{ position: "absolute", top: 48, left: 16 }}>{explain(locale, error)}</Text> : null}
       {shift?.status === "SCHEDULED" ? (
         <Pressable
-          style={{ position: "absolute", bottom: 36, left: 24, right: 24, backgroundColor: colors.olive, borderRadius: 999, paddingVertical: 22, alignItems: "center" }}
+          hitSlop={12}
+          style={{ position: "absolute", bottom: 24, left: 16, right: 16, zIndex: 20, elevation: 20, minHeight: 64, backgroundColor: colors.olive, borderRadius: 999, alignItems: "center", justifyContent: "center" }}
           onPress={async () => {
             const position = await Promise.race([
               Location.getCurrentPositionAsync({}).catch(() => null),
@@ -101,7 +102,7 @@ export default function DriverScreen() {
         </Pressable>
       ) : null}
       {next && shift?.status !== "SCHEDULED" ? (
-        <View style={{ position: "absolute", left: 12, right: 12, bottom: 16, backgroundColor: "#fff", borderRadius: 24, padding: 18 }}>
+        <View style={{ position: "absolute", left: 12, right: 12, bottom: 16, zIndex: 20, elevation: 20, backgroundColor: "#fff", borderRadius: 24, padding: 18 }}>
           <Text style={{ fontSize: 22, fontWeight: "700" }}>{next.business}</Text>
           <Text style={{ marginTop: 4, color: "#5c6b62" }}>{next.label}</Text>
           <Text style={{ marginTop: 8 }}>{t(locale, `bin_${next.binType}` as MessageKey)} · {t(locale, `bracket_${next.bracket}` as MessageKey)}</Text>
@@ -109,17 +110,17 @@ export default function DriverScreen() {
           <Text>{t(locale, "eta")}: {data?.eta ? formatWhen(data.eta, locale) : "—"}</Text>
           <Text>{next.phone}</Text>
           <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
-            <Pressable style={{ flex: 1, borderWidth: 1, borderColor: colors.olive, borderRadius: 16, paddingVertical: 16, alignItems: "center" }} onPress={() => void session.api(`/driver/shifts/${shift.id}/${shift.status === "PAUSED" ? "resume" : "pause"}`, { method: "POST" }).then(load)}>
+            <Pressable hitSlop={8} style={{ flex: 1, minHeight: 52, borderWidth: 1, borderColor: colors.olive, borderRadius: 16, alignItems: "center", justifyContent: "center" }} onPress={() => void session.api(`/driver/shifts/${shift.id}/${shift.status === "PAUSED" ? "resume" : "pause"}`, { method: "POST" }).then(load)}>
               <Text style={{ color: colors.olive, fontWeight: "700" }}>{shift.status === "PAUSED" ? t(locale, "resume") : t(locale, "pause")}</Text>
             </Pressable>
-            <Pressable disabled={shift.status !== "IN_PROGRESS"} style={{ flex: 1, backgroundColor: colors.olive, borderRadius: 16, paddingVertical: 16, alignItems: "center", opacity: shift.status === "IN_PROGRESS" ? 1 : 0.4 }} onPress={() => void session.api(`/driver/shifts/${shift.id}/complete`, { method: "POST" }).then(load)}>
+            <Pressable hitSlop={8} disabled={shift.status !== "IN_PROGRESS"} style={{ flex: 1, minHeight: 52, backgroundColor: colors.olive, borderRadius: 16, alignItems: "center", justifyContent: "center", opacity: shift.status === "IN_PROGRESS" ? 1 : 0.4 }} onPress={() => void session.api(`/driver/shifts/${shift.id}/complete`, { method: "POST" }).then(load)}>
               <Text style={{ color: "#fff", fontWeight: "700" }}>{t(locale, "completeStop")}</Text>
             </Pressable>
           </View>
         </View>
       ) : null}
       {shift?.status === "ENDED" ? (
-        <View style={{ position: "absolute", left: 12, right: 12, bottom: 16, backgroundColor: "#fff", borderRadius: 24, padding: 18 }}>
+        <View style={{ position: "absolute", left: 12, right: 12, bottom: 16, zIndex: 20, elevation: 20, backgroundColor: "#fff", borderRadius: 24, padding: 18 }}>
           <Text style={{ fontSize: 22, fontWeight: "700" }}>{t(locale, "shiftDone")}</Text>
           {done.map((stop) => <Text key={stop.id} style={{ marginTop: 6 }}>{stop.business}</Text>)}
         </View>
