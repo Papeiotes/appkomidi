@@ -1,5 +1,5 @@
 import { t } from "@vardia/shared";
-import { useLocalSearchParams } from "expo-router";
+import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -7,6 +7,7 @@ import type { WebView } from "react-native-webview";
 import { io } from "socket.io-client";
 import { Leaflet } from "../src/leaflet";
 import { liveHtml } from "../src/map-html";
+import { LogoutButton } from "../src/logout";
 import { useSession } from "../src/session";
 import { styles } from "../src/theme";
 
@@ -37,6 +38,7 @@ export default function TrackScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      <Stack.Screen options={{ title: t(locale, "live"), headerRight: () => <LogoutButton /> }} />
       <View style={styles.pad}>
         <Text style={styles.title}>{t(locale, "live")}</Text>
         {arrival ? <Text style={styles.card}>{t(locale, "arrivedTitle")}. {t(locale, "arrivedBody")}</Text> : null}

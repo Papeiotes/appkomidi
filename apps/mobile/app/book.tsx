@@ -1,8 +1,9 @@
 import { HORIZON_DAYS, athensDateKey, athensDatePlus, athensParts, formatWhen, t, type Locale, type MessageKey } from "@vardia/shared";
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LogoutButton } from "../src/logout";
 import { useSession } from "../src/session";
 import { colors, styles } from "../src/theme";
 
@@ -59,6 +60,7 @@ export default function BookScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      <Stack.Screen options={{ title: t(locale, "bookCta"), headerRight: () => <LogoutButton /> }} />
       <ScrollView contentContainerStyle={styles.pad}>
         <View style={{ height: 6, backgroundColor: "#f4f7f5", borderRadius: 99 }}>
           <View style={{ height: 6, width: `${((step + 1) / Math.max(total, 1)) * 100}%`, backgroundColor: colors.olive, borderRadius: 99 }} />

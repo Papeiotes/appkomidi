@@ -16,7 +16,8 @@ export default function LoginScreen() {
 
   useEffect(() => {
     if (!session.ready || !session.user) return;
-    router.replace(session.user.role === "DRIVER" ? "/driver" : "/shop");
+    const role = session.user.role;
+    router.replace(role === "DRIVER" ? "/driver" : role === "OFFICE" || role === "ADMIN" ? "/staff" : "/shop");
   }, [session.ready, session.user, router]);
 
   return (

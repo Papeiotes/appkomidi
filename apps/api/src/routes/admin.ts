@@ -13,7 +13,7 @@ const username = z.string().trim().toLowerCase().min(3).max(32).regex(/^[a-z0-9.
 
 adminRouter.get(
   "/admin/businesses",
-  requireAuth("ADMIN"),
+  requireAuth("ADMIN", "OFFICE"),
   wrap(async (req, res) => {
     const auth = (req as AuthedRequest).auth;
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
@@ -28,7 +28,7 @@ adminRouter.get(
 
 adminRouter.post(
   "/admin/businesses/:id/approve",
-  requireAuth("ADMIN"),
+  requireAuth("ADMIN", "OFFICE"),
   wrap(async (req, res) => {
     const body = z
       .object({
@@ -37,8 +37,9 @@ adminRouter.post(
         subAreaId: z.string().nullable().optional(),
       })
       .parse(req.body ?? {});
+    const auth = (req as AuthedRequest).auth;
     const business = await prisma.business.findUnique({ where: { id: String(req.params.id) } });
-    if (!business) throw new HttpError(404, "NOT_FOUND");
+    if (!business || business.municipalityId !== auth.municipalityId) throw new HttpError(404, "NOT_FOUND");
     const lat = body.lat ?? business.lat;
     const lng = body.lng ?? business.lng;
     const areas = await prisma.subArea.findMany({ where: { municipalityId: business.municipalityId } });
@@ -66,11 +67,12 @@ adminRouter.post(
 
 adminRouter.post(
   "/admin/businesses/:id/reject",
-  requireAuth("ADMIN"),
+  requireAuth("ADMIN", "OFFICE"),
   wrap(async (req, res) => {
+    const auth = (req as AuthedRequest).auth;
     const body = z.object({ note: z.string().max(300).optional() }).parse(req.body ?? {});
     const business = await prisma.business.findUnique({ where: { id: String(req.params.id) } });
-    if (!business) throw new HttpError(404, "NOT_FOUND");
+    if (!business || business.municipalityId !== auth.municipalityId) throw new HttpError(404, "NOT_FOUND");
     const updated = await prisma.business.update({
       where: { id: business.id },
       data: { status: "REJECTED", rejectionNote: body.note ?? null },

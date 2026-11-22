@@ -107,10 +107,10 @@ export default function DrivePage() {
         />
       </div>
       <div className="pointer-events-none absolute inset-0 z-[1000]">
-        <button type="button" className="pointer-events-auto absolute top-3 left-3 inline-flex h-11 min-h-11 items-center rounded-full bg-white px-4 text-sm shadow" onClick={() => { auth.logout(); window.location.assign("/"); }}>
+        <button type="button" className="pointer-events-auto absolute top-3 right-3 inline-flex h-11 min-h-11 items-center rounded-full border border-border bg-white px-4 text-sm shadow" onClick={() => { auth.logout(); window.location.assign("/"); }}>
           {t(locale, "logout")}
         </button>
-        {error ? <p className="pointer-events-auto absolute top-3 right-3 max-w-[70%] rounded-xl bg-white px-3 py-2 text-sm text-destructive shadow">{error}</p> : null}
+        {error ? <p className="pointer-events-auto absolute top-16 right-3 max-w-[70%] rounded-xl bg-white px-3 py-2 text-sm text-destructive shadow">{error}</p> : null}
 
         {shift?.status === "SCHEDULED" ? (
           <button

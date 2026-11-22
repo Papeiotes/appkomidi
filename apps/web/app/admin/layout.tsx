@@ -2,7 +2,7 @@
 
 import { t, type MessageKey } from "@vardia/shared";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Logo } from "@/components/logo";
 import { LanguageToggle } from "@/components/shell";
@@ -43,8 +43,13 @@ function NavLinks({ path, onPick }: { path: string; onPick?: () => void }) {
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const auth = useRequire("ADMIN");
   const path = usePathname();
+  const router = useRouter();
   const locale = auth.locale;
   const [open, setOpen] = useState(false);
+  function signOut() {
+    auth.logout();
+    router.push("/");
+  }
   useEffect(() => setOpen(false), [path]);
 
   return (
@@ -54,6 +59,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           ☰
         </button>
         <Logo />
+        <button type="button" className="ml-auto inline-flex h-11 items-center rounded-full border border-border px-4 text-sm" onClick={signOut}>
+          {t(locale, "logout")}
+        </button>
       </header>
       {open ? (
         <div className="fixed inset-0 z-50 md:hidden">
@@ -68,9 +76,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             <NavLinks path={path} onPick={() => setOpen(false)} />
             <div className="mt-auto pt-6">
               <LanguageToggle locale={locale} onChange={auth.setLocale} />
-              <button type="button" className="mt-3 inline-flex h-11 items-center text-base text-muted-foreground" onClick={() => auth.logout()}>
-                {t(locale, "logout")}
-              </button>
             </div>
           </aside>
         </div>
@@ -82,12 +87,16 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </div>
         <div className="mt-auto px-5 py-6">
           <LanguageToggle locale={locale} onChange={auth.setLocale} />
-          <button type="button" className="mt-4 inline-flex h-11 items-center text-sm text-muted-foreground" onClick={() => auth.logout()}>
+        </div>
+      </aside>
+      <div className="min-w-0 px-4 py-6 sm:px-6 md:px-10 md:py-8">
+        <div className="mb-4 hidden justify-end md:flex">
+          <button type="button" className="inline-flex h-11 items-center rounded-full border border-border px-4 text-sm" onClick={signOut}>
             {t(locale, "logout")}
           </button>
         </div>
-      </aside>
-      <div className="min-w-0 px-4 py-6 sm:px-6 md:px-10 md:py-8">{children}</div>
+        {children}
+      </div>
     </div>
   );
 }

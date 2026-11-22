@@ -1,8 +1,9 @@
 import { formatWhen, t, type MessageKey } from "@vardia/shared";
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LogoutButton } from "../src/logout";
 import { useSession } from "../src/session";
 import { colors, styles } from "../src/theme";
 
@@ -30,6 +31,7 @@ export default function ShopScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      <Stack.Screen options={{ title: t(locale, "brand"), headerRight: () => <LogoutButton /> }} />
       <ScrollView contentContainerStyle={[styles.pad, { paddingBottom: 40 }]}>
         <View style={styles.row}>
           <Text style={[styles.title, { color: colors.olive }]}>{t(locale, "brand")}</Text>
