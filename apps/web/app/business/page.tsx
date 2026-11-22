@@ -30,6 +30,7 @@ export default function BusinessHome() {
   const [pending, setPending] = useState(false);
   const [tab, setTab] = useState<"upcoming" | "history">("upcoming");
   const [rows, setRows] = useState<Booking[]>([]);
+  const [today, setToday] = useState("");
 
   useEffect(() => {
     if (!auth.token) return;
@@ -41,7 +42,10 @@ export default function BusinessHome() {
     });
   }, [auth.token]);
 
-  const today = athensDateKey(new Date());
+  useEffect(() => {
+    setToday(athensDateKey(new Date()));
+  }, []);
+
   const upcoming = rows.filter((row) => row.status === "CONFIRMED");
   const history = rows.filter((row) => row.status !== "CONFIRMED");
   const shown = tab === "history" ? history : upcoming;

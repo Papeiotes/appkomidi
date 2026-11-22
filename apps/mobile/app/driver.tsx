@@ -67,8 +67,10 @@ export default function DriverScreen() {
     };
   }, [data?.shift?.id, data?.shift?.status, session.apiUrl, session.token]);
 
-  const shift = data?.shift;
-  const next = data?.stops.find((stop) => stop.id === data?.nextStopId);
+  const shift = data?.shift ?? null;
+  const next = data?.stops.find((stop) => stop.id === data?.nextStopId) ?? null;
+  const scheduled = shift?.status === "SCHEDULED" ? shift : null;
+  const driving = next && shift && shift.status !== "SCHEDULED" ? shift : null;
   const done = (data?.stops ?? []).filter((stop) => stop.status === "COMPLETED");
 
   useEffect(() => {
@@ -86,7 +88,7 @@ export default function DriverScreen() {
   const panel = (
     <View style={{ gap: 12 }}>
       {error ? <Text>{explain(locale, error)}</Text> : null}
-      {shift?.status === "SCHEDULED" ? (
+      {scheduled ? (
         <Pressable
           hitSlop={12}
           style={{ minHeight: 64, backgroundColor: colors.olive, borderRadius: 999, alignItems: "center", justifyContent: "center" }}
@@ -95,14 +97,14 @@ export default function DriverScreen() {
               Location.getCurrentPositionAsync({}).catch(() => null),
               new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500)),
             ]);
-            await session.api(`/driver/shifts/${shift.id}/start`, { method: "POST", body: JSON.stringify({ lat: position?.coords.latitude ?? 37.971, lng: position?.coords.longitude ?? 23.728 }) });
+            await session.api(`/driver/shifts/${scheduled.id}/start`, { method: "POST", body: JSON.stringify({ lat: position?.coords.latitude ?? 37.971, lng: position?.coords.longitude ?? 23.728 }) });
             await load();
           }}
         >
           <Text style={{ color: "#fff", fontSize: 28, fontWeight: "700" }}>{t(locale, "startShift")}</Text>
         </Pressable>
       ) : null}
-      {next && shift?.status !== "SCHEDULED" ? (
+      {driving && next ? (
         <View style={{ backgroundColor: "#fff", borderRadius: 24, padding: 18, borderWidth: landscape ? 0 : 0 }}>
           <Text style={{ fontSize: 22, fontWeight: "700" }}>{next.business}</Text>
           <Text style={{ marginTop: 4, color: "#5c6b62" }}>{next.label}</Text>
@@ -111,10 +113,10 @@ export default function DriverScreen() {
           <Text>{t(locale, "eta")}: {data?.eta ? formatWhen(data.eta, locale) : "—"}</Text>
           <Text>{next.phone}</Text>
           <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
-            <Pressable hitSlop={8} style={{ flex: 1, minHeight: 52, borderWidth: 1, borderColor: colors.olive, borderRadius: 16, alignItems: "center", justifyContent: "center" }} onPress={() => void session.api(`/driver/shifts/${shift.id}/${shift.status === "PAUSED" ? "resume" : "pause"}`, { method: "POST" }).then(load)}>
-              <Text style={{ color: colors.olive, fontWeight: "700" }}>{shift.status === "PAUSED" ? t(locale, "resume") : t(locale, "pause")}</Text>
+            <Pressable hitSlop={8} style={{ flex: 1, minHeight: 52, borderWidth: 1, borderColor: colors.olive, borderRadius: 16, alignItems: "center", justifyContent: "center" }} onPress={() => void session.api(`/driver/shifts/${driving.id}/${driving.status === "PAUSED" ? "resume" : "pause"}`, { method: "POST" }).then(load)}>
+              <Text style={{ color: colors.olive, fontWeight: "700" }}>{driving.status === "PAUSED" ? t(locale, "resume") : t(locale, "pause")}</Text>
             </Pressable>
-            <Pressable hitSlop={8} disabled={shift.status !== "IN_PROGRESS"} style={{ flex: 1, minHeight: 52, backgroundColor: colors.olive, borderRadius: 16, alignItems: "center", justifyContent: "center", opacity: shift.status === "IN_PROGRESS" ? 1 : 0.4 }} onPress={() => void session.api(`/driver/shifts/${shift.id}/complete`, { method: "POST" }).then(load)}>
+            <Pressable hitSlop={8} disabled={driving.status !== "IN_PROGRESS"} style={{ flex: 1, minHeight: 52, backgroundColor: colors.olive, borderRadius: 16, alignItems: "center", justifyContent: "center", opacity: driving.status === "IN_PROGRESS" ? 1 : 0.4 }} onPress={() => void session.api(`/driver/shifts/${driving.id}/complete`, { method: "POST" }).then(load)}>
               <Text style={{ color: "#fff", fontWeight: "700" }}>{t(locale, "completeStop")}</Text>
             </Pressable>
           </View>
